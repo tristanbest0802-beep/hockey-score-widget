@@ -1,0 +1,17 @@
+﻿Hockey Score Widget affiche le score d'un match de la LNH en direct dans OBS.
+
+Avant d'installer
+- Windows 10 ou 11, 64 bits.
+- OBS Studio 28 ou plus récent, avec le serveur WebSocket activé (Outils > Paramètres du serveur WebSocket).
+- Une connexion internet pour recevoir les scores.
+
+Vos données
+- Tout reste sur votre ordinateur : aucun compte, aucune publicité, aucune donnée envoyée à l'auteur.
+- Le logiciel lit seulement les scores publics de l'API de la LNH (api-web.nhle.com) et ses logos (assets.nhle.com).
+- Vos réglages sont enregistrés dans %APPDATA%\HockeyScoreWidget. Désinstaller le logiciel ne les efface pas.
+
+Logiciel indépendant, non affilié à la Ligue nationale de hockey ni à ses équipes.
+Les noms et logos des équipes sont des marques de leurs propriétaires.
+
+Logiciel libre et gratuit sous licence GPL-3.0, fourni sans garantie.
+Code source : https://github.com/tristanbest0802-beep/hockey-score-widget

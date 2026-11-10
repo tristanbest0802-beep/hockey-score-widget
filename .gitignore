@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.exe
+.env
+logs/
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Local settings hold the OBS WebSocket password: never commit.
+settings.json
+*.spec
+graphify-out/

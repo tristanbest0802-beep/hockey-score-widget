@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Score Hockey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Every size comes from the app (settings.SIZES) as a CSS variable; these are only fallbacks. */
+  :root { --accent: #2D7F55; --bg: #0B0B0C; --text: #F1F6F3; --a: #2D7F55; --h: #2D7F55;
+          --bar_height: 84px; --radius: 8px; --border: 3px; --skew: 14deg; --team_padding: 20px;
+          --logo_size: 62px; --logo_gap: 16px; --name_size: 40px; --name_spacing: 0px;
+          --score_size: 64px; --score_width: 86px; --score_spacing: 0px;
+          --clock_size: 44px; --clock_spacing: 0px; --period_size: 24px; --center_width: 128px; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; color: var(--text); }
+  .board { display: inline-block; margin: 10px calc(var(--bar_height) * .5 + 10px); }
+
+  /* Silver bevel around the whole bar, as on TV broadcasts. */
+  .frame { display: flex; align-items: stretch; height: var(--bar_height); padding: var(--border);
+           border-radius: var(--radius);
+           background: linear-gradient(180deg, #F4F6F8 0%, #8E959C 45%, #D9DDE1 70%, #6B7178 100%);
+           box-shadow: 0 3px 12px rgb(0 0 0 / .45); }
+  .cell { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  /* Gloss: light top half, darker bottom, over each panel colour. */
+  .gloss .cell::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+                 background: linear-gradient(180deg, rgb(255 255 255 / .22) 0%, rgb(255 255 255 / .04) 48%,
+                                             rgb(0 0 0 / .10) 52%, rgb(0 0 0 / .28) 100%); }
+  .cell > * { position: relative; z-index: 1; }
+  .away { background: var(--a); }
+  .home { background: var(--h); }
+  .team { gap: var(--logo_gap); padding: 0 var(--team_padding); }
+  .team.away { border-radius: max(0px, calc(var(--radius) - var(--border))) 0 0 max(0px, calc(var(--radius) - var(--border))); }
+  .team.home { border-radius: 0 max(0px, calc(var(--radius) - var(--border))) max(0px, calc(var(--radius) - var(--border))) 0; }
+  .score { min-width: var(--score_width); font-size: var(--score_size); font-weight: 800; line-height: 1;
+           letter-spacing: var(--score_spacing); font-variant-numeric: tabular-nums;
+           text-shadow: 0 2px 4px rgb(0 0 0 / .45); }
+  .score::before { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / .28); }
+  .score.away { border-left: 1px solid rgb(0 0 0 / .35); }
+  .score.home { border-right: 1px solid rgb(0 0 0 / .35); }
+  .center { flex-direction: column; min-width: var(--center_width); padding: 0 14px; background: var(--bg);
+            border-left: 2px solid #9AA0A6; border-right: 2px solid #9AA0A6; }
+  .gloss .center::after { background: linear-gradient(180deg, rgb(255 255 255 / .10) 0%, transparent 50%); }
+  .period { font-size: var(--period_size); font-weight: 700; line-height: 1; }
+  .clock { font-size: var(--clock_size); font-weight: 700; line-height: 1; letter-spacing: var(--clock_spacing);
+           font-variant-numeric: tabular-nums; }
+  .period:empty, .clock:empty { display: none; }
+  .center.live .period::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px;
+           border-radius: 50%; background: #E5484D; vertical-align: middle; }
+  /* NHL SVGs carry wide empty margins: draw bigger, pull the margin back in. User logos are drawn as is. */
+  .logo { width: calc(var(--logo_size) * 1.68); height: calc(var(--logo_size) * 1.68);
+          margin: calc(var(--logo_size) * -.34); object-fit: contain; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .4)); }
+  .logo.custom { width: var(--logo_size); height: var(--logo_size); margin: 0; }
+  .label { display: flex; flex-direction: column; align-items: center; }
+  .name { font-size: var(--name_size); font-weight: 700; line-height: 1; text-transform: uppercase; white-space: nowrap;
+          letter-spacing: var(--name_spacing); text-shadow: 0 2px 3px rgb(0 0 0 / .4); }
+  .sog { font-size: calc(var(--name_size) * .4); font-weight: 500; opacity: .8; }
+
+  /* Variant 2: slanted ends. The bar is skewed, its content set straight again. */
+  .slanted .frame { transform: skewX(calc(var(--skew) * -1)); }
+  .slanted .cell > * { transform: skewX(var(--skew)); }
+
+  .bump { animation: bump .6s ease-out; }
+  @keyframes bump { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
+  .score span span { display: inline-block; }
+  @media (prefers-reduced-motion: reduce) { .bump { animation: none; } }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="board hidden" id="board">
+  <div class="frame">
+    <div class="cell team away"><img class="logo" id="a-logo" alt=""><div class="label" id="a-label"><div class="name" id="a-name"></div><div class="sog" id="a-sog"></div></div></div>
+    <div class="cell score away"><span><span id="a-score"></span></span></div>
+    <div class="cell center" id="center"><div class="period" id="period"></div><div class="clock" id="clock"></div></div>
+    <div class="cell score home"><span><span id="h-score"></span></span></div>
+    <div class="cell team home"><div class="label" id="h-label"><div class="name" id="h-name"></div><div class="sog" id="h-sog"></div></div><img class="logo" id="h-logo" alt=""></div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let last = {};
+const SIZE_KEYS = ["bar_height", "radius", "border", "skew", "team_padding", "logo_size", "logo_gap", "name_size",
+  "name_spacing", "score_size", "score_width", "score_spacing", "clock_size", "clock_spacing", "period_size", "center_width"];
+
+function setScore(id, value) {
+  const el = $(id);
+  const text = String(value);
+  if (last[id] !== undefined && last[id] !== text) {
+    el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump");
+  }
+  last[id] = text;
+  el.textContent = text;
+}
+
+function side(prefix, team, style) {
+  $(prefix + "-name").textContent = team.label;
+  setScore(prefix + "-score", team.score);
+  const logo = $(prefix + "-logo");
+  logo.classList.toggle("hidden", !style.show_logos || !team.logo);
+  logo.classList.toggle("custom", !!team.logo_custom);
+  if (style.show_logos && team.logo && logo.getAttribute("src") !== team.logo) logo.src = team.logo;
+  $(prefix + "-name").classList.toggle("hidden", !style.show_names);
+  $(prefix + "-label").classList.toggle("hidden", !style.show_names && !(style.show_sog && team.sog != null));
+  const sog = $(prefix + "-sog");
+  sog.classList.toggle("hidden", !style.show_sog || team.sog == null);
+  sog.textContent = "Tirs " + (team.sog ?? "");
+  document.documentElement.style.setProperty("--" + prefix,
+    style.team_colors && team.color ? team.color : style.accent);
+}
+
+async function tick() {
+  try {
+    const state = await (await fetch("/state", { cache: "no-store" })).json();
+    const style = state.style;
+    const root = document.documentElement.style;
+    root.setProperty("--accent", style.accent);
+    root.setProperty("--bg", style.background);
+    root.setProperty("--text", style.text);
+    const board = $("board");
+    board.classList.toggle("slanted", style.layout === "slanted");
+    board.classList.toggle("gloss", style.show_gloss !== false);
+    for (const key of SIZE_KEYS) if (style[key] != null) root.setProperty("--" + key, style[key] + (key === "skew" ? "deg" : "px"));
+    const game = state.game;
+    board.classList.toggle("hidden", !game);
+    if (game) {
+      side("a", game.away, style);
+      side("h", game.home, style);
+      $("period").textContent = style.show_period === false ? "" : (game.period ?? "");
+      $("clock").textContent = game.clock ?? "";
+      $("center").classList.toggle("live", game.live);
+      $("center").classList.toggle("hidden", !style.show_status);
+    }
+  } catch (e) { /* app closed: keep the last score on screen */ }
+}
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

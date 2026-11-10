@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Hockey Score Widget</title>
+  <!-- White swoosh behind the puck, like the curve of a shot: thick at the upper left, thinning to points. -->
+  <path d="M165.2 494.3 A212 212 0 1 1 415.3 167.3 A206 206 0 1 0 165.2 494.3 Z"
+        fill="#FFFFFF" stroke="#1A1B1E" stroke-width="6" stroke-linejoin="round" paint-order="stroke"/>
+  <!-- Puck: side band with its bottom curve, top face, green rim. -->
+  <path d="M70 290 v72 a186 76 0 0 0 372 0 v-72 z" fill="#0E0F11" stroke="#3A3D44" stroke-width="6"/>
+  <ellipse cx="256" cy="290" rx="186" ry="76" fill="#26282D"/>
+  <ellipse cx="256" cy="290" rx="179" ry="69" fill="none" stroke="#3FA772" stroke-width="13"/>
+</svg>
