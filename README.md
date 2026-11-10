@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" width="140" alt="Logo de Hockey Score Widget : un palet noir cerclé de vert, avec un arc blanc derrière">
+  <img src="assets/logo.png" width="140" alt="Logo de Hockey Score Widget : un palet en plein vol, avec des traînées blanches et vertes derrière lui">
 </p>
 
 <h1 align="center">Hockey Score Widget</h1>
