@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ctypes
 import re
+import sys
 import threading
 import webbrowser
 from pathlib import Path
@@ -131,12 +133,29 @@ class App(ctk.CTk):
         self.current_page = ""
         self.show_page(TAB_NAMES[0])
         self.protocol("WM_DELETE_WINDOW", self.close)
+        self.after(0, self._double_buffer)
 
         self._push_state()
         if start_services:
             self._start_server()
             threading.Thread(target=self._poll_loop, daemon=True).start()
         self.after(1000, self._preview_loop)
+
+    def _double_buffer(self) -> None:
+        """Paint the whole window off-screen first (WS_EX_COMPOSITED).
+
+        Each CustomTkinter widget is its own canvas: while scrolling, Windows redraws them one by one,
+        so cards tear and flicker. Composited painting moves every panel as one piece.
+        """
+        if sys.platform != "win32":
+            return
+        try:
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetParent(self.winfo_id())
+            style = user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
+            user32.SetWindowLongW(hwnd, -20, style | 0x02000000)  # WS_EX_COMPOSITED
+        except (AttributeError, OSError):  # not fatal: only the scrolling looks worse
+            pass
 
     # ----- sidebar -------------------------------------------------------
     def _build_sidebar(self) -> None:
