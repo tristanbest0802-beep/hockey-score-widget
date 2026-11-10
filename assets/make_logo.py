@@ -152,6 +152,32 @@ def installer_images(logo: Image.Image) -> None:
         tile.convert("RGB").save(ROOT / "installer" / f"petit-{suffix}.bmp")
 
 
+# Lucide icons (ISC licence), from https://icones.js.org.
+ICONS = {
+    "monitor-down": '<path d="M12 13V7m3 3l-3 3l-3-3"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4m-4 0h8"/>',
+    "download": '<path d="M12 15V3m9 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10l5 5l5-5"/>',
+}
+
+
+def button(text: str, icon: str, primary: bool, name: str, scale: int = 2) -> None:
+    """README button as a PNG at 2x (GitHub shows it at half size, so it stays sharp)."""
+    font = ImageFont.truetype(str(ROOT / "hockey_widget" / "fonts" / "BarlowCondensed-Bold.ttf"), 23 * scale)
+    ink = "#FFFFFF" if primary else "#ECEDEF"
+    icon_px, pad, gap, h = 22 * scale, 22 * scale, 10 * scale, 52 * scale
+    w = round(pad * 2 + icon_px + gap + font.getlength(text))
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    if primary:
+        d.rounded_rectangle((0, 0, w - 1, h - 1), radius=10 * scale, fill="#2D7F55")
+    else:
+        d.rounded_rectangle((0, 0, w - 1, h - 1), radius=10 * scale, fill="#18191C", outline="#2D7F55", width=2 * scale)
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="{ink}" '
+           f'stroke-linecap="round" stroke-linejoin="round" stroke-width="2">{ICONS[icon]}</g></svg>')
+    im.alpha_composite(render(svg, icon_px), (pad, (h - icon_px) // 2))
+    d.text((pad + icon_px + gap, h / 2), text, font=font, fill=ink, anchor="lm")
+    im.save(ROOT / "assets" / name)
+
+
 def main() -> None:
     svg = build_svg()
     (ROOT / "assets" / "logo.svg").write_text(svg, encoding="utf-8")
@@ -159,6 +185,8 @@ def main() -> None:
     big.resize((512, 512), Image.LANCZOS).save(ROOT / "assets" / "logo.png")
     big.save(ROOT / "assets" / "icon.ico", sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
     installer_images(big)
+    button("Installer pour Windows", "monitor-down", True, "bouton-installer.png")
+    button("Télécharger l'exe seul", "download", False, "bouton-telecharger.png")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest"><img alt="Télécharger" src="https://img.shields.io/github/v/release/tristanbest0802-beep/hockey-score-widget?label=t%C3%A9l%C3%A9charger&color=2D7F55"></a>
+  <a href="https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest/download/HockeyScoreWidget-Setup.exe"><img src="assets/bouton-installer.png" height="52" alt="Installer pour Windows"></a>
+  &nbsp;
+  <a href="https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest/download/HockeyScoreWidget.exe"><img src="assets/bouton-telecharger.png" height="52" alt="Télécharger l'exe seul"></a>
+</p>
+
+<p align="center">
+  <sub><a href="#installation">Guide d'installation</a> · <a href="https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest">Notes de version</a> · Windows 10 et 11, 64 bits</sub>
+</p>
+
+<p align="center">
+  <a href="https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest"><img alt="Dernière version" src="https://img.shields.io/github/v/release/tristanbest0802-beep/hockey-score-widget?label=version&color=2D7F55"></a>
   <img alt="Windows 10 et 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-2D7F55">
   <img alt="OBS Studio 28 et plus" src="https://img.shields.io/badge/OBS%20Studio-28%2B-2D7F55">
   <a href="LICENSE"><img alt="Licence GPL-3.0" src="https://img.shields.io/badge/licence-GPL--3.0-2D7F55"></a>
@@ -70,15 +80,18 @@ Le logiciel crée lui-même la source dans OBS. Vous choisissez l'équipe à sui
 
 ## Installation
 
-1. Ouvrez la page [Releases](https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest).
-2. Téléchargez **`HockeyScoreWidget-Setup.exe`**.
-3. Lancez-le et suivez l'assistant. Aucun droit administrateur n'est demandé.
+1. Téléchargez **[`HockeyScoreWidget-Setup.exe`](https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest/download/HockeyScoreWidget-Setup.exe)**
+   (ou passez par la page [Releases](https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest)).
+2. Lancez-le et suivez l'assistant. Aucun droit administrateur n'est demandé.
    Le logiciel s'installe dans `%LOCALAPPDATA%\Programs\Hockey Score Widget`, avec un raccourci
    dans le menu Démarrer et, si vous le cochez, sur le bureau.
 
 > **Avertissement Windows SmartScreen** : le logiciel n'est pas signé (un certificat coûte cher).
 > Windows peut afficher « Windows a protégé votre ordinateur ». Cliquez sur *Informations complémentaires*,
 > puis *Exécuter quand même*. Le fichier `SHA256SUMS.txt` de chaque version permet de vérifier le téléchargement.
+
+**Sans installation** : [`HockeyScoreWidget.exe`](https://github.com/tristanbest0802-beep/hockey-score-widget/releases/latest/download/HockeyScoreWidget.exe) se lance directement,
+sans raccourci ni désinstalleur.
 
 **Configuration requise** : Windows 10 ou 11 (64 bits), OBS Studio 28 ou plus récent, une connexion internet.
 

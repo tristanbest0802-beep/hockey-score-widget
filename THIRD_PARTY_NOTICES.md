@@ -25,6 +25,12 @@ and are linked here.
 The Barlow Condensed licence text is in `hockey_widget/fonts/OFL.txt` (installed as `OFL-Barlow-Condensed.txt`).
 Copyright 2017 The Barlow Project Authors.
 
+## Used in the README only
+
+| Component | Licence | Use |
+| --- | --- | --- |
+| Lucide icons (`monitor-down`, `download`) | ISC | Icons on the download buttons, via https://icones.js.org |
+
 ## Used to build the program (not inside it, except the bootloader)
 
 | Component | Licence | Note |
