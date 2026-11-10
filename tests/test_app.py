@@ -58,5 +58,36 @@ class CustomisePageTest(unittest.TestCase):
                 app.close()
 
 
+class LayoutTest(unittest.TestCase):
+    def test_no_scrolling_pages_and_clickable_game_list(self) -> None:
+        import customtkinter as ctk
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as tmp:
+            app = App(settings_file=Path(tmp) / "settings.json", start_services=False)
+            try:
+                stack = list(app.pages.values())
+                while stack:  # pages fit the window: scrolling many widgets tears on Windows
+                    widget = stack.pop()
+                    self.assertNotIsInstance(widget, ctk.CTkScrollableFrame)
+                    stack.extend(widget.winfo_children())
+                bos = Team("BOS", "Bruins", 0, 0, "")
+                games = [Game(1, "LIVE", "", Team("TOR", "Maple Leafs", 1, 0, ""), Team("MTL", "Canadiens", 2, 0, ""),
+                              2, "REG", "05:00", False),
+                         Game(2, "LIVE", "", bos, Team("NYR", "Rangers", 0, 0, ""), 1, "REG", "10:00", False)]
+                app.auto_var.set(False)
+                app._on_follow_change()
+                app._on_games(games)
+                app.show_page("Aperçu")
+                app.update()
+                pitch = (app.games_list.ROW + app.games_list.GAP) * app.games_list._scale()
+                app.games_list._on_click(SimpleNamespace(y=pitch + 10))
+                self.assertEqual(app.settings["selected_game"], 2)
+                for name in app.SECTIONS:
+                    app._show_section(name)
+                    self.assertTrue(app.sections[name].winfo_manager())
+            finally:
+                app.close()
+
+
 if __name__ == "__main__":
     unittest.main()

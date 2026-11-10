@@ -6,6 +6,7 @@ import ctypes
 import re
 import sys
 import threading
+import tkinter as tk
 import webbrowser
 from pathlib import Path
 from tkinter import colorchooser, filedialog
@@ -88,13 +89,108 @@ def muted(master, text: str, **kwargs) -> ctk.CTkLabel:
                         justify="left", **kwargs)
 
 
+def rounded_rect(canvas: tk.Canvas, x0, y0, x1, y1, r, **kwargs) -> int:
+    points = [x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r, x1, y1 - r, x1, y1,
+              x1 - r, y1, x0 + r, y1, x0, y1, x0, y1 - r, x0, y0 + r, x0, y0]
+    return canvas.create_polygon(points, smooth=True, **kwargs)
+
+
+class GameList(tk.Canvas):
+    """Today's games, drawn on a single canvas.
+
+    The rows are canvas drawings, not one widget each: scrolling moves them as one block,
+    with no tearing however fast the wheel turns.
+    """
+
+    ROW, GAP, STEP = 42, 6, 40
+
+    def __init__(self, master, on_select) -> None:
+        super().__init__(master, bg=COL_CARD, highlightthickness=0, bd=0, yscrollincrement=1)
+        self.on_select = on_select
+        self.games: list[nhl_api.Game] = []
+        self.selected_id: int | None = None
+        self.hover: int | None = None
+        self.scrollbar = ctk.CTkScrollbar(master, command=self.yview, button_color=COL_BORDER,
+                                          button_hover_color=GREEN_HOVER)
+        self.configure(yscrollcommand=self._on_scroll)
+        self.bind("<Configure>", lambda _e: self.draw())
+        self.bind("<MouseWheel>", self._on_wheel)
+        self.bind("<Motion>", self._on_motion)
+        self.bind("<Leave>", lambda _e: self._set_hover(None))
+        self.bind("<Button-1>", self._on_click)
+
+    def _scale(self) -> float:
+        return ctk.ScalingTracker.get_widget_scaling(self)
+
+    def set_games(self, games: list[nhl_api.Game], selected_id: int | None) -> None:
+        self.games, self.selected_id = games, selected_id
+        self.draw()
+
+    def _row_at(self, y: float) -> int | None:
+        pitch = (self.ROW + self.GAP) * self._scale()
+        index, offset = divmod(self.canvasy(y), pitch)
+        inside = offset <= self.ROW * self._scale()
+        return int(index) if inside and 0 <= index < len(self.games) else None
+
+    def draw(self) -> None:
+        self.delete("all")
+        k, width = self._scale(), self.winfo_width()
+        if not self.games:
+            self.create_text(6 * k, 18 * k, text="Aucun match chargé pour l'instant.", anchor="w",
+                             fill=COL_MUTED, font=(FONT_FAMILY, -round(12 * k)))
+            self.configure(scrollregion=(0, 0, width, 40 * k))
+            return
+        bold, normal = (FONT_FAMILY, -round(13 * k), "bold"), (FONT_FAMILY, -round(13 * k))
+        for i, game in enumerate(self.games):
+            y0 = i * (self.ROW + self.GAP) * k
+            y1 = y0 + self.ROW * k
+            mid = (y0 + y1) / 2
+            selected = game.id == self.selected_id
+            fill = GREEN if selected else (COL_CARD_HOVER if i == self.hover else COL_CARD)
+            rounded_rect(self, 1, y0 + 1, width - 2, y1 - 1, 8 * k, fill=fill,
+                         outline="" if selected else COL_BORDER)
+            score = "" if game.away.score is None else f"{game.away.score} – {game.home.score}"
+            self.create_text(16 * k, mid, anchor="w", fill=COL_TEXT, font=bold,
+                             text=f"{game.away.abbrev}  @  {game.home.abbrev}")
+            self.create_text(150 * k, mid, anchor="w", fill=COL_TEXT, font=bold, text=score)
+            self.create_text(width - 16 * k, mid, anchor="e", font=bold if selected else normal,
+                             fill="#FFFFFF" if selected else COL_MUTED, text=nhl_api.status_text(game))
+        self.configure(scrollregion=(0, 0, width, len(self.games) * (self.ROW + self.GAP) * k))
+
+    def _on_scroll(self, first, last) -> None:
+        self.scrollbar.set(first, last)
+        if float(first) <= 0 and float(last) >= 1:
+            self.scrollbar.grid_remove()
+        else:
+            self.scrollbar.grid()
+
+    def _on_wheel(self, event) -> None:
+        if self.yview() != (0.0, 1.0):
+            self.yview_scroll(round(-event.delta / 120 * self.STEP * self._scale()), "units")
+            self._on_motion(event)
+
+    def _set_hover(self, index: int | None) -> None:
+        if index != self.hover:
+            self.hover = index
+            self.configure(cursor="hand2" if index is not None else "")
+            self.draw()
+
+    def _on_motion(self, event) -> None:
+        self._set_hover(self._row_at(event.y))
+
+    def _on_click(self, event) -> None:
+        index = self._row_at(event.y)
+        if index is not None:
+            self.on_select(self.games[index])
+
+
 class App(ctk.CTk):
     def __init__(self, settings_file: Path | None = None, start_services: bool = True) -> None:
         apply_theme()
         super().__init__(fg_color=COL_BG)
         self.title(APP_TITLE)
-        self.geometry("980x640")
-        self.minsize(820, 560)
+        self.geometry("1100x780")
+        self.minsize(980, 720)  # every page fits: nothing scrolls except the games list
         icon = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
         if icon.exists():  # CustomTkinter sets its own icon after ~200 ms: set ours after it
             self.after(300, lambda: self.iconbitmap(str(icon)))
@@ -113,49 +209,19 @@ class App(ctk.CTk):
         self._build_sidebar()
         self.pages: dict[str, ctk.CTkFrame] = {}
         for name, builder in zip(TAB_NAMES, (self._build_preview, self._build_customise, self._build_settings)):
-            if name == "Personnaliser":
-                # Preview pinned on top: it stays in sight while scrolling through the settings.
-                root = ctk.CTkFrame(self, fg_color=COL_BG, corner_radius=0)
-                root.grid_columnconfigure(0, weight=1)
-                root.grid_rowconfigure(1, weight=1)
-                pinned = ctk.CTkFrame(root, fg_color=COL_BG, corner_radius=0)
-                pinned.grid(row=0, column=0, sticky="ew")
-                pinned.grid_columnconfigure(0, weight=1)
-                self._page_header(pinned, "Personnaliser", "Chaque réglage s'applique tout de suite dans OBS.")
-                self._live_panel(pinned, row=2, pady=(0, 6))
-                page = ctk.CTkScrollableFrame(root, fg_color=COL_BG, corner_radius=0)
-                page.grid(row=1, column=0, sticky="nsew")
-            else:
-                root = page = ctk.CTkScrollableFrame(self, fg_color=COL_BG, corner_radius=0)
+            page = ctk.CTkFrame(self, fg_color=COL_BG, corner_radius=0)
             page.grid_columnconfigure(0, weight=1)
             builder(page)
-            self.pages[name] = root
+            self.pages[name] = page
         self.current_page = ""
         self.show_page(TAB_NAMES[0])
         self.protocol("WM_DELETE_WINDOW", self.close)
-        self.after(0, self._double_buffer)
 
         self._push_state()
         if start_services:
             self._start_server()
             threading.Thread(target=self._poll_loop, daemon=True).start()
         self.after(1000, self._preview_loop)
-
-    def _double_buffer(self) -> None:
-        """Paint the whole window off-screen first (WS_EX_COMPOSITED).
-
-        Each CustomTkinter widget is its own canvas: while scrolling, Windows redraws them one by one,
-        so cards tear and flicker. Composited painting moves every panel as one piece.
-        """
-        if sys.platform != "win32":
-            return
-        try:
-            user32 = ctypes.windll.user32
-            hwnd = user32.GetParent(self.winfo_id())
-            style = user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
-            user32.SetWindowLongW(hwnd, -20, style | 0x02000000)  # WS_EX_COMPOSITED
-        except (AttributeError, OSError):  # not fatal: only the scrolling looks worse
-            pass
 
     # ----- sidebar -------------------------------------------------------
     def _build_sidebar(self) -> None:
@@ -218,7 +284,7 @@ class App(ctk.CTk):
         self._live_panel(page, row=2)
 
         follow = card(page)
-        follow.grid(row=3, column=0, sticky="ew", padx=28, pady=(22, 0))
+        follow.grid(row=3, column=0, sticky="ew", padx=28, pady=(16, 0))
         follow.grid_columnconfigure(1, weight=1)
         section_title(follow, "Match suivi").grid(row=0, column=0, columnspan=3, sticky="w", padx=18, pady=(14, 6))
         self.auto_var = ctk.BooleanVar(value=self.settings["auto_favourite"])
@@ -233,35 +299,23 @@ class App(ctk.CTk):
             row=2, column=0, columnspan=3, sticky="w", padx=18, pady=(4, 14))
 
         games_card = card(page)
-        games_card.grid(row=4, column=0, sticky="ew", padx=28, pady=(16, 28))
+        games_card.grid(row=4, column=0, sticky="nsew", padx=28, pady=(16, 24))
         games_card.grid_columnconfigure(0, weight=1)
+        games_card.grid_rowconfigure(1, weight=1)
+        page.grid_rowconfigure(4, weight=1)
         head = ctk.CTkFrame(games_card, fg_color="transparent")
         head.grid(row=0, column=0, sticky="ew", padx=18, pady=(14, 6))
         section_title(head, "Matchs du jour").pack(side="left")
         ctk.CTkButton(head, text="Actualiser", width=100, height=30, font=font(12, "bold"),
                       command=lambda: threading.Thread(target=self._fetch, daemon=True).start()).pack(side="right")
-        self.games_list = ctk.CTkFrame(games_card, fg_color="transparent")
-        self.games_list.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 12))
-        self.games_list.grid_columnconfigure(0, weight=1)
+        self.games_list = GameList(games_card, self._select_game)
+        self.games_list.grid(row=1, column=0, sticky="nsew", padx=(14, 4), pady=(0, 14))
+        self.games_list.scrollbar.grid(row=1, column=1, sticky="ns", padx=(0, 8), pady=(0, 14))
         self._render_games()
 
     def _render_games(self) -> None:
-        for child in self.games_list.winfo_children():
-            child.destroy()
-        if not self.games:
-            muted(self.games_list, "Aucun match chargé pour l'instant.").grid(row=0, column=0, sticky="w", padx=6, pady=8)
-            return
         followed = self._followed_game()
-        for row, game in enumerate(self.games):
-            score = "" if game.away.score is None else f"   {game.away.score} – {game.home.score}"
-            text = f"{game.away.abbrev}  @  {game.home.abbrev}{score}      {nhl_api.status_text(game)}"
-            selected = followed is not None and followed.id == game.id
-            ctk.CTkButton(self.games_list, text=text, anchor="w", height=38, corner_radius=8,
-                          font=font(13, "bold" if selected else "normal"),
-                          fg_color=GREEN if selected else "transparent",
-                          hover_color=GREEN_HOVER if selected else COL_CARD_HOVER,
-                          text_color=COL_TEXT, border_width=0 if selected else 1, border_color=COL_BORDER,
-                          command=lambda g=game: self._select_game(g)).grid(row=row, column=0, sticky="ew", pady=3)
+        self.games_list.set_games(self.games, followed.id if followed else None)
 
     def _select_game(self, game: nhl_api.Game) -> None:
         self.settings["selected_game"] = game.id
@@ -337,10 +391,27 @@ class App(ctk.CTk):
                 ("show_status", "Bloc du temps"), ("show_period", "Période"), ("show_sog", "Tirs au but"),
                 ("show_gloss", "Reflet brillant"))
 
+    SECTIONS = ("Style", "Équipes", "Barre et logo", "Score et temps", "Couleurs et retard")
+
     def _build_customise(self, page) -> None:
+        self._page_header(page, "Personnaliser", "Chaque réglage s'applique tout de suite dans OBS.")
+        self._live_panel(page, row=2)
+        self.section_var = ctk.StringVar(value=self.SECTIONS[0])
+        ctk.CTkSegmentedButton(page, values=list(self.SECTIONS), variable=self.section_var, font=font(13),
+                               height=34, command=self._show_section).grid(
+            row=3, column=0, sticky="w", padx=28, pady=(16, 12))
+        self.sections: dict[str, ctk.CTkFrame] = {}
+
+        def section(name: str) -> ctk.CTkFrame:
+            frame = ctk.CTkFrame(page, fg_color="transparent")
+            frame.grid(row=4, column=0, sticky="new", padx=28)
+            frame.grid_columnconfigure((0, 1), weight=1, uniform="half")
+            self.sections[name] = frame
+            return frame
+
         # Style: layout and what is shown.
-        style = card(page)
-        style.grid(row=3, column=0, sticky="ew", padx=28, pady=(10, 0))
+        style = card(section("Style"))
+        style.grid(row=0, column=0, columnspan=2, sticky="ew")
         section_title(style, "Style").grid(row=0, column=0, columnspan=4, sticky="w", padx=18, pady=(14, 8))
         self.layout_var = ctk.StringVar(value="Penché" if self.settings["layout"] == "slanted" else "Classique")
         ctk.CTkSegmentedButton(style, values=["Classique", "Penché"], variable=self.layout_var, font=font(12),
@@ -355,8 +426,8 @@ class App(ctk.CTk):
         muted(style, "").grid(row=5, column=0, pady=2)
 
         # Teams of the followed game: name, colour, logo.
-        names = card(page)
-        names.grid(row=4, column=0, sticky="ew", padx=28, pady=(16, 0))
+        names = card(section("Équipes"))
+        names.grid(row=0, column=0, columnspan=2, sticky="ew")
         names.grid_columnconfigure(1, weight=1)
         section_title(names, "Équipes du match").grid(row=0, column=0, columnspan=5, sticky="w", padx=18, pady=(14, 6))
         muted(names, "Nom, couleur et logo de chaque équipe. « Par défaut » remet ceux de la LNH.").grid(
@@ -386,15 +457,13 @@ class App(ctk.CTk):
             self.team_buttons.append((colour, logo))
         muted(names, "").grid(row=5, column=0, pady=4)
 
-        # Sizes, two cards per line.
-        grid = ctk.CTkFrame(page, fg_color="transparent")
-        grid.grid(row=5, column=0, sticky="ew", padx=28, pady=(16, 0))
-        grid.grid_columnconfigure((0, 1), weight=1, uniform="sizes")
+        # Sizes: two cards side by side per section.
         self.size_widgets = {}
         for index, (title, keys) in enumerate(self.SIZE_GROUPS):
-            box = card(grid)
-            box.grid(row=index // 2, column=index % 2, sticky="nsew",
-                     padx=(0, 8) if index % 2 == 0 else (8, 0), pady=(0, 16))
+            name = "Barre et logo" if index < 2 else "Score et temps"
+            host = self.sections.get(name) or section(name)
+            box = card(host)
+            box.grid(row=0, column=index % 2, sticky="nsew", padx=(0, 8) if index % 2 == 0 else (8, 0))
             box.grid_columnconfigure(1, weight=1)
             head = ctk.CTkFrame(box, fg_color="transparent")
             head.grid(row=0, column=0, columnspan=3, sticky="ew", padx=18, pady=(14, 6))
@@ -404,11 +473,12 @@ class App(ctk.CTk):
                 self._size_row(box, row, key)
             muted(box, "").grid(row=len(keys) + 1, column=0, pady=2)
 
-        colours = card(page)
-        colours.grid(row=6, column=0, sticky="ew", padx=28)
+        colours = card(section("Couleurs et retard"))
+        colours.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        colours.grid_columnconfigure(0, weight=1)
         section_title(colours, "Couleurs").grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 6))
         self.colour_buttons = {}
-        for row, (key, text) in enumerate((("accent", "Fond des équipes (couleurs d'équipe coupées)"),
+        for row, (key, text) in enumerate((("accent", "Fond des équipes"),
                                            ("background", "Fond du temps"), ("text", "Texte")), start=1):
             ctk.CTkLabel(colours, text=text, font=font(13), text_color=COL_TEXT, anchor="w").grid(
                 row=row, column=0, sticky="w", padx=18, pady=4)
@@ -417,16 +487,17 @@ class App(ctk.CTk):
                                    text_color=self._ink(self.settings[key]),
                                    border_width=1, border_color=COL_BORDER,
                                    command=lambda k=key: self._pick_colour(k))
-            button.grid(row=row, column=1, sticky="w", padx=(14, 18), pady=4)
+            button.grid(row=row, column=1, sticky="e", padx=(10, 18), pady=4)
             self.colour_buttons[key] = button
-        muted(colours, "").grid(row=4, column=0, pady=2)
+        muted(colours, "Fond des équipes : utilisé quand « Couleurs des équipes » est coupé.", wraplength=280).grid(
+            row=4, column=0, columnspan=2, sticky="w", padx=18, pady=(4, 14))
 
-        delay = card(page)
-        delay.grid(row=7, column=0, sticky="ew", padx=28, pady=(16, 28))
+        delay = card(self.sections["Couleurs et retard"])
+        delay.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         delay.grid_columnconfigure(0, weight=1)
         section_title(delay, "Retard du score").grid(row=0, column=0, sticky="w", padx=18, pady=(14, 2))
-        muted(delay, "Le flux vidéo a du retard sur l'API (OnHockey, RDS, TVA Sports : ça varie).\n"
-                     "Décalez le score pour ne pas annoncer un but avant l'image.").grid(
+        muted(delay, "Le flux vidéo a du retard sur l'API (OnHockey, RDS, TVA Sports : ça varie). "
+                     "Décalez le score pour ne pas annoncer un but avant l'image.", wraplength=280).grid(
             row=1, column=0, columnspan=2, sticky="w", padx=18)
         self.delay_label = ctk.CTkLabel(delay, text="", font=font(13, "bold"), text_color=GREEN_TEXT, width=70)
         self.delay_label.grid(row=2, column=1, padx=18)
@@ -437,6 +508,14 @@ class App(ctk.CTk):
         self.delay_slider.bind("<ButtonRelease-1>", lambda _e: self._on_delay(int(self.delay_slider.get())))
         self._on_delay(self.settings["delay_seconds"], save=False)
         self._refresh_name_rows()
+        self._show_section(self.SECTIONS[0])
+
+    def _show_section(self, name: str) -> None:
+        for other, frame in self.sections.items():
+            if other == name:
+                frame.grid()
+            else:
+                frame.grid_remove()
 
     @staticmethod
     def _ink(colour: str) -> str:
@@ -583,8 +662,11 @@ class App(ctk.CTk):
     def _build_settings(self, page) -> None:
         self._page_header(page, "Réglages", "Connexion à OBS et fonctionnement du logiciel.")
 
-        box = card(page)
-        box.grid(row=2, column=0, sticky="ew", padx=28)
+        cards = ctk.CTkFrame(page, fg_color="transparent")
+        cards.grid(row=2, column=0, sticky="ew", padx=28)
+        cards.grid_columnconfigure((0, 1), weight=1, uniform="half")
+        box = card(cards)
+        box.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         box.grid_columnconfigure(1, weight=1)
         section_title(box, "OBS WebSocket").grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 2))
         muted(box, "Dans OBS : Outils › Paramètres du serveur WebSocket.").grid(
@@ -602,23 +684,25 @@ class App(ctk.CTk):
         ctk.CTkButton(actions, text="Créer la source dans OBS", height=34, font=font(12, "bold"),
                       command=lambda: self._obs_action(
                           lambda s: obs.ensure_browser_source(s, self.widget_url()))).pack(side="left", padx=10)
-        self.obs_result = muted(box, "", wraplength=560)
+        self.obs_result = muted(box, "", wraplength=280)
         self.obs_result.grid(row=9, column=0, columnspan=2, sticky="w", padx=18, pady=(4, 16))
 
-        app_box = card(page)
-        app_box.grid(row=3, column=0, sticky="ew", padx=28, pady=(16, 0))
+        app_box = card(cards)
+        app_box.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         app_box.grid_columnconfigure(1, weight=1)
         section_title(app_box, "Logiciel").grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 8))
-        self._field(app_box, 1, "server_port", "Port du widget (redémarrage requis)", "")
-        self._field(app_box, 2, "poll_seconds", "Actualisation en secondes (10 minimum)", "")
+        self._field(app_box, 1, "server_port", "Port du widget", "")
+        self._field(app_box, 2, "poll_seconds", "Actualisation (s)", "")
+        muted(app_box, "Port : redémarrage requis. Actualisation : 10 secondes minimum.", wraplength=280).grid(
+            row=4, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 16))
         url_row = ctk.CTkFrame(app_box, fg_color="transparent")
-        url_row.grid(row=3, column=0, columnspan=2, sticky="ew", padx=18, pady=(8, 16))
+        url_row.grid(row=3, column=0, columnspan=2, sticky="ew", padx=18, pady=(8, 8))
         self.url_label = ctk.CTkLabel(url_row, text=self.widget_url(), font=font(12), text_color=GREEN_TEXT)
         self.url_label.pack(side="left")
         ghost_button(url_row, "Copier l'URL", self._copy_url).pack(side="left", padx=12)
 
         bottom = ctk.CTkFrame(page, fg_color="transparent")
-        bottom.grid(row=4, column=0, sticky="ew", padx=28, pady=(16, 28))
+        bottom.grid(row=3, column=0, sticky="ew", padx=28, pady=(16, 28))
         ctk.CTkButton(bottom, text="Enregistrer", height=38, width=150, font=font(13, "bold"),
                       command=self._save_settings_page).pack(side="left")
         self.save_result = muted(bottom, "")

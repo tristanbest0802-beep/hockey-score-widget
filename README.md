@@ -121,7 +121,7 @@ Le logiciel a trois onglets, dans la barre de gauche.
 Laissez *Suivre automatiquement l'équipe préférée* activé (code `MTL`, `TOR`, `BOS`...)
 ou cliquez sur un match pour le choisir.
 
-**Personnaliser** : l'aperçu reste en haut pendant que vous réglez tout en dessous.
+**Personnaliser** : l'aperçu reste en haut, les réglages sont rangés en cinq sous-onglets (Style, Équipes, Barre et logo, Score et temps, Couleurs et retard).
 Chaque changement part tout de suite dans OBS.
 
 **Réglages** : connexion à OBS, port du widget, fréquence de mise à jour.
