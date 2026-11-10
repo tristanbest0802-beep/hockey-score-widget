@@ -1,4 +1,4 @@
 customtkinter==6.0.0        # interface graphique
 simpleobsws==1.4.3          # client OBS WebSocket v5
-pillow==12.3.0              # aperçu du widget dans le logiciel
+pillow==13.0.0              # aperçu du widget dans le logiciel
 resvg-py==0.5.0             # logos SVG de la LNH en image pour l'aperçu
