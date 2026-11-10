@@ -13,9 +13,9 @@ from tkinter import colorchooser, filedialog
 
 import customtkinter as ctk
 
-from hockey_widget import nhl_api, obs, preview, settings as settings_store
+from hockey_widget import nhl_api, obs, preview, settings as settings_store, teams
 from hockey_widget.server import start_server
-from hockey_widget.settings import SIZES
+from hockey_widget.settings import PRESETS, SIZES
 from hockey_widget.widget_state import LOGO_TYPES, DelayedFeed, build_state, custom_logo, team_color
 
 APP_TITLE = "Hockey Score Widget"
@@ -377,6 +377,8 @@ class App(ctk.CTk):
 
     def _preview_loop(self) -> None:
         self._render_preview()  # every second: delayed score, NHL logos once downloaded
+        if not self._thumbs_ready:
+            self._refresh_presets()
         if not self._stop.is_set():
             self.after(1000, self._preview_loop)
 
@@ -391,7 +393,7 @@ class App(ctk.CTk):
                 ("show_status", "Bloc du temps"), ("show_period", "Période"), ("show_sog", "Tirs au but"),
                 ("show_gloss", "Reflet brillant"))
 
-    SECTIONS = ("Style", "Équipes", "Barre et logo", "Score et temps", "Couleurs et retard")
+    SECTIONS = ("Presets", "Style", "Équipes", "Barre et logo", "Score et temps", "Couleurs et retard")
 
     def _build_customise(self, page) -> None:
         self._page_header(page, "Personnaliser", "Chaque réglage s'applique tout de suite dans OBS.")
@@ -409,14 +411,30 @@ class App(ctk.CTk):
             self.sections[name] = frame
             return frame
 
-        # Style: layout and what is shown.
+        # Presets: every ready-made look, one click each.
+        presets = card(section("Presets"))
+        presets.grid(row=0, column=0, columnspan=2, sticky="ew")
+        presets.grid_columnconfigure((0, 1, 2), weight=1, uniform="third")
+        section_title(presets, "Presets").grid(row=0, column=0, columnspan=3, sticky="w", padx=18, pady=(14, 2))
+        muted(presets, "Un clic applique le style et ses tailles. Noms, couleurs et logos des équipes restent "
+                       "les vôtres.").grid(row=1, column=0, columnspan=3, sticky="w", padx=18, pady=(0, 8))
+        self.preset_buttons = {}
+        for index, (key, (label, _values)) in enumerate(PRESETS.items()):
+            button = ctk.CTkButton(presets, text=label, compound="top", height=74, font=font(12, "bold"),
+                                   fg_color=COL_STAGE, hover_color=COL_CARD_HOVER, text_color=COL_TEXT,
+                                   border_width=1, border_color=COL_BORDER,
+                                   command=lambda k=key: self._apply_preset(k))
+            button.grid(row=2 + index // 3, column=index % 3, sticky="ew", padx=(18 if index % 3 == 0 else 6,
+                        18 if index % 3 == 2 else 6), pady=5)
+            self.preset_buttons[key] = button
+        muted(presets, "").grid(row=5, column=0, pady=4)
+        self._thumbs_ready = False
+        self._refresh_presets()
+
+        # Style: what is shown.
         style = card(section("Style"))
         style.grid(row=0, column=0, columnspan=2, sticky="ew")
         section_title(style, "Style").grid(row=0, column=0, columnspan=4, sticky="w", padx=18, pady=(14, 8))
-        self.layout_var = ctk.StringVar(value="Penché" if self.settings["layout"] == "slanted" else "Classique")
-        ctk.CTkSegmentedButton(style, values=["Classique", "Penché"], variable=self.layout_var, font=font(12),
-                               command=lambda _v: self._on_layout_change()).grid(
-            row=1, column=0, columnspan=4, sticky="w", padx=18, pady=(0, 10))
         self.look_vars = {}
         for index, (key, text) in enumerate(self.SWITCHES):
             var = ctk.BooleanVar(value=self.settings[key])
@@ -632,14 +650,38 @@ class App(ctk.CTk):
         self.settings["name_overrides"] = overrides
         self._save_and_push()
 
-    def _on_layout_change(self) -> None:
-        # Classic shows names, slanted shows logos only (as in the two reference designs); switch stays editable.
-        self.look_vars["show_names"].set(self.layout_var.get() == "Classique")
-        self._on_look_change()
+    # Sample game for the preset thumbnails: the same in every button, whatever is on tonight.
+    SAMPLE = nhl_api.Game(0, "LIVE", "", nhl_api.Team("MTL", "Canadiens", 2, 18, teams.logo("MTL")),
+                          nhl_api.Team("TOR", "Maple Leafs", 1, 16, teams.logo("TOR")), 2, "REG", "14:37", False)
+
+    def _refresh_presets(self) -> None:
+        """Thumbnails with the user's team overrides; redrawn until the NHL logos have downloaded."""
+        self._thumbs_ready = all(self.logos.get(teams.logo(abbrev), 8) for abbrev in ("MTL", "TOR"))
+        for key, button in self.preset_buttons.items():
+            conf = dict(self.settings, **PRESETS[key][1])
+            image = preview.render(build_state(self.SAMPLE, conf), conf, self.logos, scale=1.0,
+                                   custom_logo=lambda abbrev: custom_logo(abbrev, self.settings))
+            factor = min(220 / image.width, 46 / image.height)
+            button._thumb = ctk.CTkImage(light_image=image, dark_image=image,
+                                         size=(round(image.width * factor), round(image.height * factor)))
+            chosen = key == self.settings["preset"]
+            button.configure(image=button._thumb, border_width=2 if chosen else 1,
+                             border_color=GREEN if chosen else COL_BORDER)
+
+    def _apply_preset(self, key: str) -> None:
+        self.settings.update(PRESETS[key][1])
+        self.settings["preset"] = key
+        for name, var in self.look_vars.items():
+            var.set(self.settings[name])
+        self.format_var.set("Abréviation" if self.settings["name_format"] == "abbrev" else "Nom")
+        for name in SIZES:
+            self._show_size(name)
+        self._save_and_push()
+        self._refresh_name_rows()
+        self._refresh_presets()
 
     def _on_look_change(self) -> None:
         self.settings["name_format"] = "abbrev" if self.format_var.get() == "Abréviation" else "name"
-        self.settings["layout"] = "slanted" if self.layout_var.get() == "Penché" else "classic"
         for key, var in self.look_vars.items():
             self.settings[key] = var.get()
         self._save_and_push()

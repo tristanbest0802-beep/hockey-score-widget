@@ -50,10 +50,13 @@ class CustomisePageTest(unittest.TestCase):
                 self.assertEqual(app.feed.current(0)["style"]["clock_size"], 70)
                 app._reset_sizes(("clock_size",))
                 self.assertEqual(app.feed.current(0)["style"]["clock_size"], 44)
-                app.layout_var.set("Penché")
-                app._on_layout_change()
+                app._apply_preset("slanted")
                 self.assertEqual(app.settings["layout"], "slanted")
                 self.assertFalse(app.settings["show_names"])
+                app._apply_preset("elegant")
+                self.assertEqual(app.feed.current(0)["style"]["look"]["frame"], "gold")
+                self.assertEqual(app.size_widgets["bar_height"][0].get(), 100)
+                self.assertEqual(app.settings["preset"], "elegant")
             finally:
                 app.close()
 

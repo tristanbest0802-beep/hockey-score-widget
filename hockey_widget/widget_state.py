@@ -9,7 +9,7 @@ from collections import deque
 from pathlib import Path
 
 from hockey_widget import teams
-from hockey_widget.settings import SIZES
+from hockey_widget.settings import LOOKS, SIZES
 from hockey_widget.nhl_api import Game, Team, status_parts, status_text
 
 STYLE_KEYS = ("layout", "team_colors", "show_logos", "show_names", "show_sog", "show_status", "show_period",
@@ -42,6 +42,7 @@ def team_label(team: Team, settings: dict) -> str:
 
 def build_state(game: Game | None, settings: dict) -> dict:
     style = {key: settings[key] for key in STYLE_KEYS}
+    style["look"] = LOOKS.get(settings["layout"], LOOKS["classic"])
     if game is None:
         return {"game": None, "style": style}
 

@@ -21,7 +21,8 @@ DEFAULTS: dict = {
     "favourite": "MTL",
     "selected_game": None,
     # Widget look
-    "layout": "classic",       # "classic" (logo + name) or "slanted" (slanted ends)
+    "layout": "classic",       # a key of LOOKS
+    "preset": "classic",       # last preset picked in the Presets tab (only highlights its button)
     "team_colors": True,       # each side in its team colour; off = "accent" for both
     "name_format": "abbrev",   # "abbrev" or "name"
     "name_overrides": {},      # {"MTL": "Habs"}
@@ -41,8 +42,8 @@ DEFAULTS: dict = {
 
 # Widget dimensions in pixels: key -> (label, min, max, default). The app builds its sliders from this.
 SIZES: dict[str, tuple[str, int, int, int]] = {
-    "bar_height": ("Hauteur", 50, 160, 84),
-    "radius": ("Arrondi des coins", 0, 30, 8),
+    "bar_height": ("Hauteur", 40, 160, 84),
+    "radius": ("Arrondi des coins", 0, 60, 8),
     "border": ("Épaisseur du contour", 0, 8, 3),
     "skew": ("Inclinaison (penché)", 0, 30, 14),
     "team_padding": ("Marge sur les côtés", 0, 60, 20),
@@ -59,6 +60,57 @@ SIZES: dict[str, tuple[str, int, int, int]] = {
     "center_width": ("Largeur du centre", 60, 260, 128),
 }
 DEFAULTS.update({key: spec[3] for key, spec in SIZES.items()})
+
+# How each layout draws, read by widget.html and preview.py alike.
+#   shape: rounded | slant (whole bar skewed) | pill (rounded, slanted centre) | chamfer (cut corners)
+#   frame: silver | gold | team (away colour to home colour) | none
+#   fill:  solid | texture (ice) | dark | fade (colour to dark) | none (underline only)
+#   stack: name above the score in the team panel (no separate score box)
+#   one_line: period and clock on one line;  info: shots on goal strip under the bar
+_LOOK = dict(shape="rounded", frame="silver", fill="solid", stack=False, one_line=False, info=False)
+LOOKS: dict[str, dict] = {
+    "classic": _LOOK,
+    "slanted": dict(_LOOK, shape="slant"),
+    "modern": dict(_LOOK, shape="pill"),
+    "minimal": dict(_LOOK, frame="none", fill="none", one_line=True),
+    "textured": dict(_LOOK, fill="texture", stack=True),
+    "compact": dict(_LOOK, shape="slant", frame="team", one_line=True),
+    "elegant": dict(_LOOK, shape="chamfer", frame="gold", fill="dark", stack=True),
+    "wide": dict(_LOOK, fill="fade", stack=True, info=True),
+}
+
+_SHOW = dict(team_colors=True, show_logos=True, show_names=True, show_sog=False, show_status=True,
+             show_period=True, show_gloss=True, name_format="abbrev")
+_BASE = {**_SHOW, **{key: spec[3] for key, spec in SIZES.items()}}
+# Presets tab: key -> (button label, settings it sets). Team names, colours and logos are never touched.
+PRESETS: dict[str, tuple[str, dict]] = {
+    "classic": ("Classique", dict(_BASE, layout="classic")),
+    "slanted": ("Penché", dict(_BASE, layout="slanted", show_names=False)),
+    "simple": ("Classique simple", dict(_BASE, layout="classic", name_format="name", radius=2, border=3,
+                                        show_gloss=False, name_size=36, logo_size=60, score_size=60,
+                                        clock_size=40, period_size=30, center_width=118)),
+    "modern": ("Logo d'équipe moderne", dict(_BASE, layout="modern", name_format="name", radius=42, border=4,
+                                             name_size=36, logo_size=64, score_size=62, clock_size=40,
+                                             period_size=30, center_width=118, team_padding=24)),
+    "minimal": ("Minimaliste", dict(_BASE, layout="minimal", show_logos=False, show_gloss=False, border=0,
+                                    radius=0, bar_height=70, name_size=52, score_size=58, score_width=70,
+                                    clock_size=46, period_size=46, center_width=220, team_padding=24)),
+    "textured": ("Logos et fond texturé", dict(_BASE, layout="textured", name_format="name", bar_height=118,
+                                               radius=4, border=3, show_gloss=False, logo_size=110,
+                                               logo_gap=24, name_size=30, score_size=74, clock_size=42,
+                                               period_size=34, center_width=130, team_padding=26)),
+    "compact": ("Compact (coin)", dict(_BASE, layout="compact", show_names=False, radius=2, border=3,
+                                       skew=14, logo_size=70, score_size=60, score_width=90, clock_size=38,
+                                       period_size=38, center_width=150, team_padding=30)),
+    "elegant": ("Élégant", dict(_BASE, layout="elegant", name_format="name", bar_height=100, radius=22,
+                                border=4, show_gloss=False, logo_size=86, logo_gap=22, name_size=24,
+                                score_size=58, clock_size=46, period_size=36, center_width=140,
+                                team_padding=28)),
+    "wide": ("Large avec infos", dict(_BASE, layout="wide", name_format="name", show_sog=True, bar_height=106,
+                                      radius=4, border=3, logo_size=120, logo_gap=26, name_size=28,
+                                      score_size=70, clock_size=42, period_size=34, center_width=130,
+                                      team_padding=18)),
+}
 
 
 def settings_path() -> Path:
@@ -79,6 +131,8 @@ def load(path: Path | None = None) -> dict:
             value = saved.get(key, default)
             if default is None or isinstance(value, type(default)):
                 data[key] = value
+        if data["layout"] not in LOOKS:
+            data["layout"] = DEFAULTS["layout"]
         for key, (_label, low, high, _default) in SIZES.items():
             data[key] = min(high, max(low, data[key]))
     return data

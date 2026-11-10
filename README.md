@@ -58,7 +58,8 @@ Le logiciel crée lui-même la source dans OBS. Vous choisissez l'équipe à sui
 
 - **Score en direct** des 32 équipes de la LNH, mis à jour toutes les 10 secondes.
 - **Suivi automatique** de votre équipe préférée, ou choix manuel parmi les matchs du jour.
-- **Deux styles de bandeau** : *Classique* (logo et nom) et *Penché* (bouts inclinés, logos seuls).
+- **9 presets de bandeau** en un clic : Classique, Penché, Classique simple, Logo d'équipe moderne,
+  Minimaliste, Logos et fond texturé, Compact (coin), Élégant (contour doré), Large avec infos (tirs au but).
 - **Couleurs et logos officiels** de chaque équipe, changés automatiquement selon le match.
 - **Personnalisation complète** : nom, couleur et logo de chaque équipe, 16 réglages de taille et d'écart,
   éléments affichés, couleurs du bandeau.
@@ -73,6 +74,10 @@ Le logiciel crée lui-même la source dans OBS. Vous choisissez l'équipe à sui
 | Style classique | Style penché |
 | --- | --- |
 | <img src="assets/widget-classique.png" alt="Bandeau classique avec logos et noms"> | <img src="assets/widget-penche.png" alt="Bandeau penché avec logos seuls"> |
+
+<p align="center">
+  <img src="assets/presets.png" width="620" alt="Les 9 presets : classique, penché, classique simple, moderne, minimaliste, fond texturé, compact, élégant doré, large avec tirs au but">
+</p>
 
 <p align="center">
   <img src="assets/app-personnaliser.png" width="760" alt="Onglet Personnaliser : aperçu en direct, style, équipes et tailles">
@@ -121,7 +126,7 @@ Le logiciel a trois onglets, dans la barre de gauche.
 Laissez *Suivre automatiquement l'équipe préférée* activé (code `MTL`, `TOR`, `BOS`...)
 ou cliquez sur un match pour le choisir.
 
-**Personnaliser** : l'aperçu reste en haut, les réglages sont rangés en cinq sous-onglets (Style, Équipes, Barre et logo, Score et temps, Couleurs et retard).
+**Personnaliser** : l'aperçu reste en haut, les réglages sont rangés en six sous-onglets (Presets, Style, Équipes, Barre et logo, Score et temps, Couleurs et retard).
 Chaque changement part tout de suite dans OBS.
 
 **Réglages** : connexion à OBS, port du widget, fréquence de mise à jour.
@@ -130,7 +135,8 @@ Chaque changement part tout de suite dans OBS.
 
 | Bloc | Réglages |
 | --- | --- |
-| Style | Classique ou Penché ; couleurs des équipes ; logos ; noms ; bloc du temps ; période ; tirs au but ; reflet brillant |
+| Presets | 9 styles prêts, appliqués en un clic (forme, tailles, éléments affichés) ; vos noms, couleurs et logos d'équipe sont gardés |
+| Style | Couleurs des équipes ; logos ; noms ; bloc du temps ; période ; tirs au but ; reflet brillant |
 | Équipes du match | Abréviation (`MTL`) ou nom (`Canadiens`) ; nom personnalisé ; couleur personnalisée ; logo personnalisé (PNG, JPG, SVG, WebP, GIF) ; bouton *Par défaut* |
 | Barre | Hauteur ; arrondi des coins ; épaisseur du contour ; inclinaison (style penché) ; marge sur les côtés |
 | Logo et nom | Taille du logo ; écart entre le logo et le nom ; taille du nom ; écart entre les lettres |

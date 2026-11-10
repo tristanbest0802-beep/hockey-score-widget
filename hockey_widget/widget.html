@@ -11,16 +11,18 @@
           --bar_height: 84px; --radius: 8px; --border: 3px; --skew: 14deg; --team_padding: 20px;
           --logo_size: 62px; --logo_gap: 16px; --name_size: 40px; --name_spacing: 0px;
           --score_size: 64px; --score_width: 86px; --score_spacing: 0px;
-          --clock_size: 44px; --clock_spacing: 0px; --period_size: 24px; --center_width: 128px; }
+          --clock_size: 44px; --clock_spacing: 0px; --period_size: 24px; --center_width: 128px;
+          --ice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 .55 0 0 0 0 .6 0 0 0 0 .66 .9 0 0 0 -.25'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
   html, body { margin: 0; background: transparent; overflow: hidden; }
   body { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; color: var(--text); }
   .board { display: inline-block; margin: 10px calc(var(--bar_height) * .5 + 10px); }
 
   /* Silver bevel around the whole bar, as on TV broadcasts. */
-  .frame { display: flex; align-items: stretch; height: var(--bar_height); padding: var(--border);
-           border-radius: var(--radius);
+  .frame { display: flex; height: var(--bar_height); padding: var(--border); border-radius: var(--radius);
            background: linear-gradient(180deg, #F4F6F8 0%, #8E959C 45%, #D9DDE1 70%, #6B7178 100%);
            box-shadow: 0 3px 12px rgb(0 0 0 / .45); }
+  .inner { display: flex; flex: 1; align-items: stretch; overflow: hidden;
+           border-radius: max(0px, calc(var(--radius) - var(--border))); }
   .cell { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   /* Gloss: light top half, darker bottom, over each panel colour. */
   .gloss .cell::after { content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -30,8 +32,6 @@
   .away { background: var(--a); }
   .home { background: var(--h); }
   .team { gap: var(--logo_gap); padding: 0 var(--team_padding); }
-  .team.away { border-radius: max(0px, calc(var(--radius) - var(--border))) 0 0 max(0px, calc(var(--radius) - var(--border))); }
-  .team.home { border-radius: 0 max(0px, calc(var(--radius) - var(--border))) max(0px, calc(var(--radius) - var(--border))) 0; }
   .score { min-width: var(--score_width); font-size: var(--score_size); font-weight: 800; line-height: 1;
            letter-spacing: var(--score_spacing); font-variant-numeric: tabular-nums;
            text-shadow: 0 2px 4px rgb(0 0 0 / .45); }
@@ -55,10 +55,54 @@
   .name { font-size: var(--name_size); font-weight: 700; line-height: 1; text-transform: uppercase; white-space: nowrap;
           letter-spacing: var(--name_spacing); text-shadow: 0 2px 3px rgb(0 0 0 / .4); }
   .sog { font-size: calc(var(--name_size) * .4); font-weight: 500; opacity: .8; }
+  .big { display: none; font-size: var(--score_size); font-weight: 800; line-height: .9;
+         letter-spacing: var(--score_spacing); font-variant-numeric: tabular-nums; text-shadow: 0 2px 4px rgb(0 0 0 / .45); }
+  .info { display: none; }
 
-  /* Variant 2: slanted ends. The bar is skewed, its content set straight again. */
-  .slanted .frame { transform: skewX(calc(var(--skew) * -1)); }
-  .slanted .cell > * { transform: skewX(var(--skew)); }
+  /* Looks (settings.LOOKS). shape-slant: the bar is skewed, its content set straight again. */
+  .shape-slant .frame { transform: skewX(calc(var(--skew) * -1)); }
+  .shape-slant .cell > * { transform: skewX(var(--skew)); }
+  /* shape-pill: the centre is a parallelogram that overlaps both score boxes. */
+  .shape-pill { --k: calc(var(--bar_height) * .17); }
+  .shape-pill .center { z-index: 2; margin: 0 calc(var(--k) * -1); padding: 0 calc(14px + var(--k)); border: 0;
+                        clip-path: polygon(var(--k) 0, 100% 0, calc(100% - var(--k)) 100%, 0 100%); }
+  /* shape-chamfer: cut corners; the inner cut is smaller so the border stays even on the diagonal. */
+  .shape-chamfer { --c: var(--radius); --ci: max(0px, calc(var(--radius) - var(--border) * .586)); }
+  .shape-chamfer .frame { border-radius: 0; box-shadow: none; clip-path: polygon(var(--c) 0, calc(100% - var(--c)) 0,
+      100% var(--c), 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, var(--c) 100%, 0 calc(100% - var(--c)), 0 var(--c)); }
+  .shape-chamfer .inner { border-radius: 0; clip-path: polygon(var(--ci) 0, calc(100% - var(--ci)) 0,
+      100% var(--ci), 100% calc(100% - var(--ci)), calc(100% - var(--ci)) 100%, var(--ci) 100%, 0 calc(100% - var(--ci)), 0 var(--ci)); }
+
+  .frame-gold .frame { background: linear-gradient(180deg, #FFF1B0 0%, #C99A3A 40%, #F3D27A 65%, #8A6420 100%); }
+  .frame-gold .center { color: #E8C468; border-color: #C9A04A; box-shadow: inset 0 0 0 2px #C9A04A; }
+  .frame-team .frame { background: linear-gradient(90deg, var(--a), var(--h)); }
+  .frame-none .frame { background: none; box-shadow: none; padding: 0; }
+  .frame-none .center { background: none; }
+
+  .fill-texture .team { color: #16191C; }
+  .fill-texture .team .name, .fill-texture .team .big { text-shadow: 0 1px 0 rgb(255 255 255 / .6); }
+  .fill-texture .team.away { background: linear-gradient(90deg, var(--a) 0%, transparent 62%), var(--ice),
+                linear-gradient(180deg, #F2F4F6 0%, #C9D0D6 100%); }
+  .fill-texture .team.home { background: linear-gradient(270deg, var(--h) 0%, transparent 62%), var(--ice),
+                linear-gradient(180deg, #F2F4F6 0%, #C9D0D6 100%); }
+  .fill-dark .team, .fill-dark .score { background: linear-gradient(180deg, #1C1F24 0%, #0A0B0D 100%); }
+  .fill-dark .score::before { display: none; }
+  .fill-fade .team.away { background: linear-gradient(90deg, transparent 30%, rgb(0 0 0 / .5)), var(--a); }
+  .fill-fade .team.home { background: linear-gradient(270deg, transparent 30%, rgb(0 0 0 / .5)), var(--h); }
+  .fill-none .cell { background: none; border-left: 0; border-right: 0; }
+  .fill-none .center { border-left: 2px solid rgb(255 255 255 / .85); border-right: 2px solid rgb(255 255 255 / .85); }
+  .fill-none .score::before { display: none; }
+  .fill-none .away { box-shadow: inset 0 -6px 0 var(--a); }
+  .fill-none .home { box-shadow: inset 0 -6px 0 var(--h); }
+
+  .stack .score { display: none; }
+  .stack .big { display: block; }
+  .one-line .center { flex-direction: row; gap: .3em; }
+  /* info: shots on goal in a tab under the bar. */
+  .info-on .info.show { display: block; width: max-content; margin: 0 auto; padding: 5px 36px 7px;
+      font-size: calc(var(--name_size) * .72); font-weight: 700; line-height: 1; letter-spacing: .02em;
+      background: linear-gradient(180deg, #16191D, #08090B); border: 2px solid #8E959C; border-top: 0;
+      clip-path: polygon(0 0, 100% 0, calc(100% - 20px) 100%, 20px 100%); }
 
   .bump { animation: bump .6s ease-out; }
   @keyframes bump { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
@@ -69,13 +113,14 @@
 </head>
 <body>
 <div class="board hidden" id="board">
-  <div class="frame">
-    <div class="cell team away"><img class="logo" id="a-logo" alt=""><div class="label" id="a-label"><div class="name" id="a-name"></div><div class="sog" id="a-sog"></div></div></div>
+  <div class="frame"><div class="inner">
+    <div class="cell team away"><img class="logo" id="a-logo" alt=""><div class="label" id="a-label"><div class="name" id="a-name"></div><div class="big"><span id="a-big"></span></div><div class="sog" id="a-sog"></div></div></div>
     <div class="cell score away"><span><span id="a-score"></span></span></div>
     <div class="cell center" id="center"><div class="period" id="period"></div><div class="clock" id="clock"></div></div>
     <div class="cell score home"><span><span id="h-score"></span></span></div>
-    <div class="cell team home"><div class="label" id="h-label"><div class="name" id="h-name"></div><div class="sog" id="h-sog"></div></div><img class="logo" id="h-logo" alt=""></div>
-  </div>
+    <div class="cell team home"><div class="label" id="h-label"><div class="name" id="h-name"></div><div class="big"><span id="h-big"></span></div><div class="sog" id="h-sog"></div></div><img class="logo" id="h-logo" alt=""></div>
+  </div></div>
+  <div class="info" id="info"></div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -96,14 +141,16 @@ function setScore(id, value) {
 function side(prefix, team, style) {
   $(prefix + "-name").textContent = team.label;
   setScore(prefix + "-score", team.score);
+  setScore(prefix + "-big", team.score);
   const logo = $(prefix + "-logo");
   logo.classList.toggle("hidden", !style.show_logos || !team.logo);
   logo.classList.toggle("custom", !!team.logo_custom);
   if (style.show_logos && team.logo && logo.getAttribute("src") !== team.logo) logo.src = team.logo;
   $(prefix + "-name").classList.toggle("hidden", !style.show_names);
-  $(prefix + "-label").classList.toggle("hidden", !style.show_names && !(style.show_sog && team.sog != null));
+  const showSog = style.show_sog && team.sog != null && !style.look.info;
+  $(prefix + "-label").classList.toggle("hidden", !style.look.stack && !style.show_names && !showSog);
   const sog = $(prefix + "-sog");
-  sog.classList.toggle("hidden", !style.show_sog || team.sog == null);
+  sog.classList.toggle("hidden", !showSog);
   sog.textContent = "Tirs " + (team.sog ?? "");
   document.documentElement.style.setProperty("--" + prefix,
     style.team_colors && team.color ? team.color : style.accent);
@@ -118,11 +165,12 @@ async function tick() {
     root.setProperty("--bg", style.background);
     root.setProperty("--text", style.text);
     const board = $("board");
-    board.classList.toggle("slanted", style.layout === "slanted");
-    board.classList.toggle("gloss", style.show_gloss !== false);
+    const look = style.look;
+    board.className = ["board", "shape-" + look.shape, "frame-" + look.frame, "fill-" + look.fill,
+      look.stack ? "stack" : "", look.one_line ? "one-line" : "", look.info ? "info-on" : "",
+      style.show_gloss !== false ? "gloss" : "", state.game ? "" : "hidden"].join(" ");
     for (const key of SIZE_KEYS) if (style[key] != null) root.setProperty("--" + key, style[key] + (key === "skew" ? "deg" : "px"));
     const game = state.game;
-    board.classList.toggle("hidden", !game);
     if (game) {
       side("a", game.away, style);
       side("h", game.home, style);
@@ -130,6 +178,10 @@ async function tick() {
       $("clock").textContent = game.clock ?? "";
       $("center").classList.toggle("live", game.live);
       $("center").classList.toggle("hidden", !style.show_status);
+      const info = $("info");
+      const sogKnown = game.away.sog != null && game.home.sog != null;
+      info.classList.toggle("show", style.show_sog && sogKnown);
+      info.textContent = sogKnown ? `TIRS AU BUT : ${game.away.abbrev} ${game.away.sog} • ${game.home.abbrev} ${game.home.sog}` : "";
     }
   } catch (e) { /* app closed: keep the last score on screen */ }
 }

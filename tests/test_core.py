@@ -170,3 +170,8 @@ class PreviewTest(unittest.TestCase):
         self.assertGreater(preview.render(build_state(game, slanted), slanted, logos).width,
                            preview.render(build_state(game, no_names), no_names, logos).width)
         self.assertIsNone(preview.render(build_state(None, look), look, logos))
+        for key, (_label, values) in settings.PRESETS.items():  # every preset draws
+            conf = dict(settings.DEFAULTS, **values)
+            self.assertIn(conf["layout"], settings.LOOKS, key)
+            self.assertGreaterEqual(preview.render(build_state(game, conf), conf, logos).height,
+                                    conf["bar_height"] * 2, key)
