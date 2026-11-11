@@ -60,19 +60,23 @@ def build_state(game: Game | None, settings: dict) -> dict:
     return {"game": {"id": game.id, "away": side(game.away), "home": side(game.home),
                      "status": status_text(game), "period": top, "clock": big, "live": game.is_live,
                      "running": game.is_live and game.running and game.clock_seconds is not None,
-                     "clock_seconds": game.clock_seconds, "clock_at": game.fetched_at},
+                     "clock_seconds": game.clock_seconds, "clock_at": game.fetched_at, "fresh_at": game.fetched_at},
             "style": style}
 
 
-# shortcut: if the API stays down, the clock freezes after this many seconds instead of running to 0:00.
-MAX_TICK_SECONDS = 30
+# shortcut: if the API stays down, the clock freezes this long after its last answer instead of running to 0:00.
+MAX_TICK_SECONDS = 60
+# The API's clock is the time of the last play it knows, 0 to ~25 s late, and a new answer only every ~20 s.
+# A later answer that implies a later period end is just staler, unless it is this much later: then a
+# whistle went unseen between two answers.
+MISSED_STOP_SECONDS = 30
 
 
 def tick_clock(game: dict | None, now: float) -> dict | None:
     """The API clock is only as fresh as the last poll: count it down locally between polls."""
     if not game or not game.get("running"):
         return game
-    elapsed = min(MAX_TICK_SECONDS, max(0, int(now - game["clock_at"])))
+    elapsed = max(0, int(min(now, game["fresh_at"] + MAX_TICK_SECONDS) - game["clock_at"]))
     seconds = max(0, game["clock_seconds"] - elapsed)
     return {**game, "clock": f"{seconds // 60:02d}:{seconds % 60:02d}"}
 
@@ -91,9 +95,17 @@ class DelayedFeed:
 
     def push(self, state: dict, now: float | None = None) -> None:
         now = time.time() if now is None else now
+        game = state["game"]
         with self._lock:
             self._style = state["style"]
-            self._history.append((now, state["game"]))
+            last = self._history[-1][1] if self._history else None
+            if (game and last and game.get("running") and last.get("running")
+                    and (game["id"], game["period"]) == (last["id"], last["period"])):
+                # Play never stopped: keep whichever answer puts the clock lowest, it is the least stale one.
+                late = game["clock_at"] + game["clock_seconds"] - last["clock_at"] - last["clock_seconds"]
+                if 0 <= late <= MISSED_STOP_SECONDS:
+                    game = {**game, "clock_at": last["clock_at"], "clock_seconds": last["clock_seconds"]}
+            self._history.append((now, game))
             while self._history and self._history[0][0] < now - self._keep:
                 self._history.popleft()
 

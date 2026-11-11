@@ -69,12 +69,24 @@ class WidgetStateTest(unittest.TestCase):
 
     def test_clock_counts_down_between_polls(self) -> None:
         feed = DelayedFeed()
-        game = {"clock": "12:34", "running": True, "clock_seconds": 754, "clock_at": 100}
-        feed.push({"style": {}, "game": game}, now=100)
+        game = {"id": 7, "period": "2e", "clock": "12:34", "running": True, "clock_seconds": 754,
+                "clock_at": 100, "fresh_at": 100}
+
+        def push(now: float, **changes) -> None:
+            feed.push({"style": {}, "game": {**game, "clock_at": now, "fresh_at": now, **changes}}, now=now)
+
+        push(100)
         self.assertEqual(feed.current(0, now=107)["game"]["clock"], "12:27")
         self.assertEqual(feed.current(5, now=107)["game"]["clock"], "12:32")  # stream delay
-        feed.push({"style": {}, "game": {**game, "running": False}}, now=108)
-        self.assertEqual(feed.current(0, now=150)["game"]["clock"], "12:34")  # whistle: clock stops
+        push(120, clock_seconds=744)  # staler answer (10 s of clock in 20 s): no jump back up
+        self.assertEqual(feed.current(0, now=121)["game"]["clock"], "12:13")
+        push(140, clock_seconds=710)  # fresher answer: the clock catches up
+        self.assertEqual(feed.current(0, now=141)["game"]["clock"], "11:49")
+        push(160, clock_seconds=740)  # far later: a whistle was missed, start again from this answer
+        self.assertEqual(feed.current(0, now=161)["game"]["clock"], "12:19")
+        self.assertEqual(feed.current(0, now=400)["game"]["clock"], "11:20")  # API down: freezes after 60 s
+        push(180, clock_seconds=730, running=False)
+        self.assertEqual(feed.current(0, now=300)["game"]["clock"], "12:34")  # whistle: the API's own text
         parsed = nhl_api.parse_games({"games": [live_game(clock={"timeRemaining": "05:00", "secondsRemaining": 300,
                                                                   "running": True})]})[0]
         self.assertTrue(build_state(parsed, settings.DEFAULTS)["game"]["running"])

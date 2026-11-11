@@ -64,7 +64,8 @@ def _team(raw: dict) -> Team:
     )
 
 
-def parse_games(data: dict) -> list[Game]:
+def parse_games(data: dict, fetched_at: float | None = None) -> list[Game]:
+    fetched_at = time.time() if fetched_at is None else fetched_at
     games = []
     for raw in data.get("games", []):
         clock = raw.get("clock") or {}
@@ -81,7 +82,7 @@ def parse_games(data: dict) -> list[Game]:
             intermission=bool(clock.get("inIntermission")),
             clock_seconds=clock.get("secondsRemaining"),
             running=bool(clock.get("running")),
-            fetched_at=time.time(),
+            fetched_at=fetched_at,
         ))
     return games
 
@@ -89,7 +90,12 @@ def parse_games(data: dict) -> list[Game]:
 def fetch_games(timeout: float = 10.0) -> list[Game]:
     request = urllib.request.Request(SCORE_URL, headers={"User-Agent": "hockey-score-widget"})
     with urllib.request.urlopen(request, timeout=timeout) as response:  # follows the 307 to today's date
-        return parse_games(json.load(response))
+        # The CDN serves answers up to ~19 s old: date the clock from when the answer was made, not received.
+        try:
+            age = max(0.0, float(response.headers.get("Age") or 0))
+        except ValueError:
+            age = 0.0
+        return parse_games(json.load(response), fetched_at=time.time() - age)
 
 
 def local_start(game: Game) -> str:
