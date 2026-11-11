@@ -131,6 +131,36 @@ class PenaltyTest(unittest.TestCase):
             self.assertEqual(preview.render(self.state(hidden), hidden, logos).size, plain.size)
 
 
+class EspnTest(unittest.TestCase):
+    def game(self, **clock) -> nhl_api.Game:
+        raw = live_game(clock={"timeRemaining": "12:34", "secondsRemaining": 754, "running": False, **clock})
+        return nhl_api.parse_games({"games": [raw]}, fetched_at=100)[0]
+
+    def test_find_event_and_status(self) -> None:
+        from hockey_widget import espn
+        board = {"events": [{"id": "1", "competitions": [{"competitors": [{"team": {"abbreviation": "NJ"}},
+                                                                          {"team": {"abbreviation": "TOR"}}]}]},
+                            {"id": "2", "competitions": [{"competitors": [{"team": {"abbreviation": "MTL"}},
+                                                                          {"team": {"abbreviation": "TOR"}}]}]}]}
+        self.assertEqual(espn.find_event(board, self.game()), "2")
+        status = {"clock": 702.0, "period": 2, "type": {"name": "STATUS_IN_PROGRESS"}}
+        self.assertEqual(espn.parse_status(status, 7, 110), espn.Clock(7, 2, 702, 110))
+        self.assertIsNone(espn.parse_status({**status, "type": {"name": "STATUS_END_PERIOD"}}, 7, 110))
+
+    def test_merge_takes_the_fresher_clock(self) -> None:
+        from hockey_widget import espn
+        stopped = self.game()
+        resumed = espn.merge(stopped, espn.Clock(7, 2, 748, 110))  # NHL still says stopped at 754: play resumed
+        self.assertEqual((resumed.clock_seconds, resumed.running, resumed.fetched_at), (748, True, 110))
+        self.assertIs(espn.merge(stopped, espn.Clock(7, 2, 754, 110)), stopped)  # nothing new
+        running = self.game(running=True)
+        self.assertIs(espn.merge(running, espn.Clock(7, 2, 746, 110)), running)  # NHL already counts lower
+        self.assertEqual(espn.merge(running, espn.Clock(7, 2, 740, 110)).clock_seconds, 740)
+        self.assertIs(espn.merge(running, espn.Clock(7, 3, 700, 110)), running)  # other period
+        self.assertIs(espn.merge(running, espn.Clock(8, 2, 700, 110)), running)  # other game
+        self.assertIsNone(espn.merge(None, espn.Clock(7, 2, 700, 110)))
+
+
 class SettingsTest(unittest.TestCase):
     def test_round_trip_and_bad_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

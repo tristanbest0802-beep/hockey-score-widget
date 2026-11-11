@@ -7,6 +7,7 @@ import math
 import re
 import sys
 import threading
+import time
 import tkinter as tk
 import webbrowser
 from pathlib import Path
@@ -14,7 +15,7 @@ from tkinter import colorchooser, filedialog
 
 import customtkinter as ctk
 
-from hockey_widget import nhl_api, obs, preview, settings as settings_store, teams
+from hockey_widget import espn, nhl_api, obs, preview, settings as settings_store, teams
 from hockey_widget.server import start_server
 from hockey_widget.settings import PRESETS, SIZES
 from hockey_widget.widget_state import LOGO_TYPES, DelayedFeed, build_state, custom_logo, team_color
@@ -22,6 +23,8 @@ from hockey_widget.widget_state import LOGO_TYPES, DelayedFeed, build_state, cus
 APP_TITLE = "Hockey Score Widget"
 MIN_REFRESH_SECONDS = 0.1
 API_POLL_SECONDS = 3  # the NHL answers from a ~20 s cache: asking more often brings nothing new
+ESPN_POLL_SECONDS = 2  # ESPN's clock is cached ~2 s
+ESPN_RETRY_SECONDS = 60  # game not found on ESPN: look again this much later
 TAB_NAMES = ("Aperçu", "Personnaliser", "Réglages")
 
 # Neutral darks; green (the streamer's soft jade) only as accent: active tab, controls, titles.
@@ -204,6 +207,8 @@ class App(ctk.CTk):
         self.feed = DelayedFeed()
         self.server = None
         self._stop = threading.Event()
+        self.espn_clock: espn.Clock | None = None
+        self._espn_event: tuple[int, str | None, float] | None = None  # (NHL game id, ESPN id, looked up at)
         self.logos = preview.LogoCache()
         self.preview_labels: list[ctk.CTkLabel] = []
 
@@ -224,6 +229,7 @@ class App(ctk.CTk):
         if start_services:
             self._start_server()
             threading.Thread(target=self._poll_loop, daemon=True).start()
+            threading.Thread(target=self._espn_loop, daemon=True).start()
         self.after(1000, self._preview_loop)
 
     # ----- sidebar -------------------------------------------------------
@@ -831,7 +837,7 @@ class App(ctk.CTk):
         self._push_state()
 
     def _push_state(self) -> None:
-        self.feed.push(build_state(self._followed_game(), self.settings))
+        self.feed.push(build_state(espn.merge(self._followed_game(), self.espn_clock), self.settings))
         self._render_preview()
 
     def _start_server(self) -> None:
@@ -858,6 +864,34 @@ class App(ctk.CTk):
         self._push_state()
         self._render_games()
         self._refresh_name_rows()
+
+    def _espn_loop(self) -> None:
+        while not self._stop.is_set():
+            self._fetch_espn()
+            self._stop.wait(ESPN_POLL_SECONDS)
+
+    def _fetch_espn(self) -> None:
+        game = self._followed_game()
+        if game is None or not game.is_live:
+            return
+        try:
+            cached = self._espn_event
+            if cached is None or cached[0] != game.id or (cached[1] is None
+                                                          and time.time() - cached[2] > ESPN_RETRY_SECONDS):
+                cached = self._espn_event = (game.id, espn.fetch_event_id(game), time.time())
+            if cached[1] is None:
+                return
+            clock = espn.fetch_clock(cached[1], game.id)
+        except Exception:  # ESPN down or changed: the NHL clock alone still works
+            return
+        old = self.espn_clock
+        if clock and (old is None or (clock.game_id, clock.period, clock.seconds) != (old.game_id, old.period,
+                                                                                         old.seconds)):
+            self.after(0, lambda: self._on_espn(clock))
+
+    def _on_espn(self, clock: espn.Clock) -> None:
+        self.espn_clock = clock
+        self._push_state()
 
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
