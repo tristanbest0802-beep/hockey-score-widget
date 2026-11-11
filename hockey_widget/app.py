@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import math
 import re
 import sys
 import threading
@@ -19,6 +20,7 @@ from hockey_widget.settings import PRESETS, SIZES
 from hockey_widget.widget_state import LOGO_TYPES, DelayedFeed, build_state, custom_logo, team_color
 
 APP_TITLE = "Hockey Score Widget"
+MIN_POLL_SECONDS = 0.1
 TAB_NAMES = ("Aperçu", "Personnaliser", "Réglages")
 
 # Neutral darks; green (the streamer's soft jade) only as accent: active tab, controls, titles.
@@ -764,14 +766,16 @@ class App(ctk.CTk):
         values["obs_password"] = self.fields["obs_password"].get()  # spaces can be part of a password
         try:
             ports = [int(values["obs_port"]), int(values["server_port"])]
-            poll = int(values["poll_seconds"])
+            poll = float(values["poll_seconds"].replace(",", "."))
         except ValueError:
-            return "Les ports et l'actualisation doivent être des nombres entiers."
+            return "Les ports doivent être des nombres entiers, l'actualisation un nombre (ex. 0,5)."
+        if not math.isfinite(poll):
+            return "L'actualisation doit être un nombre (ex. 0,5)."
         if not all(1024 <= port <= 65535 for port in ports):
             return "Un port doit être entre 1024 et 65535."
         if not values["obs_host"]:
             return "L'adresse d'OBS est vide."
-        self.settings.update(values, obs_port=ports[0], server_port=ports[1], poll_seconds=max(10, poll))
+        self.settings.update(values, obs_port=ports[0], server_port=ports[1], poll_seconds=max(MIN_POLL_SECONDS, poll))
         return None
 
     def _save_settings_page(self) -> None:
@@ -856,7 +860,7 @@ class App(ctk.CTk):
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
             self._fetch()
-            self._stop.wait(max(10, int(self.settings["poll_seconds"])))
+            self._stop.wait(max(MIN_POLL_SECONDS, float(self.settings["poll_seconds"])))
 
     def close(self) -> None:
         self._stop.set()

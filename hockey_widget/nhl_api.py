@@ -7,6 +7,7 @@ this is the only file to fix.
 from __future__ import annotations
 
 import json
+import time
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
@@ -36,6 +37,9 @@ class Game:
     period_type: str
     clock: str
     intermission: bool
+    clock_seconds: int | None = None
+    running: bool = False
+    fetched_at: float = 0.0
 
     @property
     def is_live(self) -> bool:
@@ -75,6 +79,9 @@ def parse_games(data: dict) -> list[Game]:
             period_type=period.get("periodType", "REG"),
             clock=clock.get("timeRemaining", ""),
             intermission=bool(clock.get("inIntermission")),
+            clock_seconds=clock.get("secondsRemaining"),
+            running=bool(clock.get("running")),
+            fetched_at=time.time(),
         ))
     return games
 

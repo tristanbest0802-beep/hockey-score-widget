@@ -58,8 +58,23 @@ def build_state(game: Game | None, settings: dict) -> dict:
 
     top, big = status_parts(game)
     return {"game": {"id": game.id, "away": side(game.away), "home": side(game.home),
-                     "status": status_text(game), "period": top, "clock": big, "live": game.is_live},
+                     "status": status_text(game), "period": top, "clock": big, "live": game.is_live,
+                     "running": game.is_live and game.running and game.clock_seconds is not None,
+                     "clock_seconds": game.clock_seconds, "clock_at": game.fetched_at},
             "style": style}
+
+
+# shortcut: if the API stays down, the clock freezes after this many seconds instead of running to 0:00.
+MAX_TICK_SECONDS = 30
+
+
+def tick_clock(game: dict | None, now: float) -> dict | None:
+    """The API clock is only as fresh as the last poll: count it down locally between polls."""
+    if not game or not game.get("running"):
+        return game
+    elapsed = min(MAX_TICK_SECONDS, max(0, int(now - game["clock_at"])))
+    seconds = max(0, game["clock_seconds"] - elapsed)
+    return {**game, "clock": f"{seconds // 60:02d}:{seconds % 60:02d}"}
 
 
 class DelayedFeed:
@@ -93,4 +108,4 @@ class DelayedFeed:
                     break
             if game is None and delay <= 0 and self._history:
                 game = self._history[-1][1]
-            return {"game": game, "style": self._style}
+            return {"game": tick_clock(game, now - max(0, delay)), "style": self._style}

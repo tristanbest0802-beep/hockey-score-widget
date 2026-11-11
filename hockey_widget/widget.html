@@ -186,7 +186,7 @@ async function tick() {
   } catch (e) { /* app closed: keep the last score on screen */ }
 }
 tick();
-setInterval(tick, 1000);
+setInterval(tick, 250);  // local request: cheap, keeps the clock within a quarter second
 </script>
 </body>
 </html>

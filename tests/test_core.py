@@ -67,6 +67,18 @@ class WidgetStateTest(unittest.TestCase):
         self.assertEqual(feed.current(20, now=131)["game"], {"score": 0})
         self.assertIsNone(feed.current(60, now=131)["game"])
 
+    def test_clock_counts_down_between_polls(self) -> None:
+        feed = DelayedFeed()
+        game = {"clock": "12:34", "running": True, "clock_seconds": 754, "clock_at": 100}
+        feed.push({"style": {}, "game": game}, now=100)
+        self.assertEqual(feed.current(0, now=107)["game"]["clock"], "12:27")
+        self.assertEqual(feed.current(5, now=107)["game"]["clock"], "12:32")  # stream delay
+        feed.push({"style": {}, "game": {**game, "running": False}}, now=108)
+        self.assertEqual(feed.current(0, now=150)["game"]["clock"], "12:34")  # whistle: clock stops
+        parsed = nhl_api.parse_games({"games": [live_game(clock={"timeRemaining": "05:00", "secondsRemaining": 300,
+                                                                  "running": True})]})[0]
+        self.assertTrue(build_state(parsed, settings.DEFAULTS)["game"]["running"])
+
 
 class SettingsTest(unittest.TestCase):
     def test_round_trip_and_bad_file(self) -> None:
