@@ -65,7 +65,9 @@ class WidgetStateTest(unittest.TestCase):
         feed.push({**style, "game": {"score": 1}}, now=130)
         self.assertEqual(feed.current(0, now=131)["game"], {"score": 1})
         self.assertEqual(feed.current(20, now=131)["game"], {"score": 0})
-        self.assertIsNone(feed.current(60, now=131)["game"])
+        self.assertEqual(feed.current(60, now=131)["game"], {"score": 0})  # nothing that old: the oldest
+        feed.push({**style, "game": {"id": 2, "score": 5}}, now=132)  # another game picked: shown at once
+        self.assertEqual(feed.current(20, now=133)["game"], {"id": 2, "score": 5})
 
     def test_clock_counts_down_between_polls(self) -> None:
         feed = DelayedFeed()
@@ -78,6 +80,7 @@ class WidgetStateTest(unittest.TestCase):
         push(100)
         self.assertEqual(feed.current(0, now=107)["game"]["clock"], "12:27")
         self.assertEqual(feed.current(5, now=107)["game"]["clock"], "12:32")  # stream delay
+        self.assertEqual(feed.current(25, now=107)["game"]["clock"], "12:52")  # delay longer than history
         push(120, clock_seconds=744)  # staler answer (10 s of clock in 20 s): no jump back up
         self.assertEqual(feed.current(0, now=121)["game"]["clock"], "12:13")
         push(140, clock_seconds=710)  # fresher answer: the clock catches up
@@ -90,6 +93,42 @@ class WidgetStateTest(unittest.TestCase):
         parsed = nhl_api.parse_games({"games": [live_game(clock={"timeRemaining": "05:00", "secondsRemaining": 300,
                                                                   "running": True})]})[0]
         self.assertTrue(build_state(parsed, settings.DEFAULTS)["game"]["running"])
+
+
+class PenaltyTest(unittest.TestCase):
+    SITUATION = {"awayTeam": {"abbrev": "TOR", "strength": 4}, "secondsRemaining": 66,
+                 "homeTeam": {"abbrev": "MTL", "strength": 5, "situationDescriptions": ["PP"]}}
+
+    def state(self, conf: dict = settings.DEFAULTS, situation: dict | None = SITUATION, **clock) -> dict:
+        raw = live_game(situation=situation,
+                        clock={"timeRemaining": "12:34", "secondsRemaining": 754, "running": True, **clock})
+        return build_state(nhl_api.parse_games({"games": [raw]}, fetched_at=100)[0], conf)
+
+    def test_power_play(self) -> None:
+        self.assertIsNone(self.state(situation=None)["game"]["pp"])
+        state = self.state()
+        self.assertEqual(state["game"]["pp"], {"text": "4v5", "side": "home", "clock": "1:06", "until": 688})
+        feed = DelayedFeed()
+        feed.push(state, now=100)
+        self.assertEqual(feed.current(0, now=110)["game"]["pp"]["clock"], "0:56")  # runs with the game clock
+        feed.push(self.state(situation={**self.SITUATION, "secondsRemaining": 20}), now=101)
+        self.assertIsNone(feed.current(0, now=125)["game"]["pp"])  # penalty over before the API says so
+        self.assertIsNone(self.state(inIntermission=True)["game"]["pp"])
+
+    def test_preview_draws_the_penalty_box(self) -> None:
+        from hockey_widget import preview
+        logos = preview.LogoCache()
+        for layout, grows in (("classic", "width"), ("minimal", "height")):
+            conf = {**settings.DEFAULTS, "layout": layout, "show_logos": False}
+            plain = preview.render(self.state(conf, situation=None), conf, logos)
+            boxed = preview.render(self.state(conf), conf, logos)
+            self.assertGreater(getattr(boxed, grows), getattr(plain, grows), layout)
+            if layout == "minimal":  # period and clock side by side: no clock, narrower centre
+                no_clock = {**conf, "show_clock": False}
+                self.assertLess(preview.render(self.state(no_clock, situation=None), no_clock, logos).width,
+                                plain.width)
+            hidden = {**conf, "show_pp": False}
+            self.assertEqual(preview.render(self.state(hidden), hidden, logos).size, plain.size)
 
 
 class SettingsTest(unittest.TestCase):

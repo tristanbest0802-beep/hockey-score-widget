@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import threading
 import time
@@ -12,8 +13,8 @@ from hockey_widget import teams
 from hockey_widget.settings import LOOKS, SIZES
 from hockey_widget.nhl_api import Game, Team, status_parts, status_text
 
-STYLE_KEYS = ("layout", "team_colors", "show_logos", "show_names", "show_sog", "show_status", "show_period",
-              "show_gloss", "accent", "background", "text", *SIZES)
+STYLE_KEYS = ("layout", "team_colors", "show_logos", "show_names", "show_sog", "show_status", "show_period", "show_clock",
+              "show_gloss", "show_pp", "accent", "background", "text", *SIZES)
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 LOGO_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml",
               ".webp": "image/webp", ".gif": "image/gif"}
@@ -57,10 +58,19 @@ def build_state(game: Game | None, settings: dict) -> dict:
                 "color": team_color(team.abbrev, settings)}
 
     top, big = status_parts(game)
+    pp = None
+    away_n, home_n, left = game.away_strength, game.home_strength, game.penalty_seconds
+    if (game.is_live and not game.intermission and isinstance(away_n, int) and isinstance(home_n, int)
+            and (away_n, home_n) != (5, 5)):
+        timed = isinstance(left, int) and game.clock_seconds is not None
+        pp = {"text": f"{away_n}v{home_n}",  # same order as the bar: away on the left
+              "side": "away" if away_n > home_n else "home" if home_n > away_n else "even",
+              "clock": _minutes(left) if isinstance(left, int) else "",
+              "until": game.clock_seconds - left if timed else None}  # game clock when the penalty ends
     return {"game": {"id": game.id, "away": side(game.away), "home": side(game.home),
                      "status": status_text(game), "period": top, "clock": big, "live": game.is_live,
                      "running": game.is_live and game.running and game.clock_seconds is not None,
-                     "clock_seconds": game.clock_seconds, "clock_at": game.fetched_at, "fresh_at": game.fetched_at},
+                     "clock_seconds": game.clock_seconds, "clock_at": game.fetched_at, "fresh_at": game.fetched_at, "pp": pp},
             "style": style}
 
 
@@ -70,15 +80,25 @@ MAX_TICK_SECONDS = 60
 # A later answer that implies a later period end is just staler, unless it is this much later: then a
 # whistle went unseen between two answers.
 MISSED_STOP_SECONDS = 30
+PERIOD_SECONDS = 1200
+
+
+def _minutes(seconds: int) -> str:
+    return f"{seconds // 60}:{seconds % 60:02d}"
 
 
 def tick_clock(game: dict | None, now: float) -> dict | None:
     """The API clock is only as fresh as the last poll: count it down locally between polls."""
     if not game or not game.get("running"):
         return game
-    elapsed = max(0, int(min(now, game["fresh_at"] + MAX_TICK_SECONDS) - game["clock_at"]))
-    seconds = max(0, game["clock_seconds"] - elapsed)
-    return {**game, "clock": f"{seconds // 60:02d}:{seconds % 60:02d}"}
+    # Negative immediately after a game switch with a stream delay: the clock is wound back by the delay.
+    elapsed = math.floor(min(now, game["fresh_at"] + MAX_TICK_SECONDS) - game["clock_at"])
+    seconds = min(PERIOD_SECONDS, max(0, game["clock_seconds"] - elapsed))
+    pp = game.get("pp")
+    if pp and pp["until"] is not None:  # the penalty runs with the game clock
+        left = seconds - pp["until"]
+        pp = {**pp, "clock": _minutes(left)} if left > 0 else None
+    return {**game, "clock": f"{seconds // 60:02d}:{seconds % 60:02d}", "pp": pp}
 
 
 class DelayedFeed:
@@ -99,6 +119,9 @@ class DelayedFeed:
         with self._lock:
             self._style = state["style"]
             last = self._history[-1][1] if self._history else None
+            if (game or {}).get("id") != (last or {}).get("id"):
+                self._history.clear()  # another game picked: show it now, not once the stream delay has passed
+                last = None
             if (game and last and game.get("running") and last.get("running")
                     and (game["id"], game["period"]) == (last["id"], last["period"])):
                 # Play never stopped: keep whichever answer puts the clock lowest, it is the least stale one.
@@ -118,6 +141,6 @@ class DelayedFeed:
                     game = snapshot
                 else:
                     break
-            if game is None and delay <= 0 and self._history:
-                game = self._history[-1][1]
+            if game is None and self._history:
+                game = self._history[0][1]  # nothing old enough yet (start, game switch): the oldest we have
             return {"game": tick_clock(game, now - max(0, delay)), "style": self._style}

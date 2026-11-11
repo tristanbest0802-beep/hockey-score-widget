@@ -16,6 +16,7 @@
   html, body { margin: 0; background: transparent; overflow: hidden; }
   body { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; color: var(--text); }
   .board { display: inline-block; margin: 10px calc(var(--bar_height) * .5 + 10px); }
+  .bars { display: flex; align-items: flex-start; gap: 8px; }
 
   /* Silver bevel around the whole bar, as on TV broadcasts. */
   .frame { display: flex; height: var(--bar_height); padding: var(--border); border-radius: var(--radius);
@@ -104,6 +105,17 @@
       background: linear-gradient(180deg, #16191D, #08090B); border: 2px solid #8E959C; border-top: 0;
       clip-path: polygon(0 0, 100% 0, calc(100% - 20px) 100%, 20px 100%); }
 
+  /* Penalty box: skaters on the ice (5v4) and penalty time left, in the colour of the team with the advantage.
+     A second .frame, so it follows the bar's shape, border and fill. Right of the bar, or below (look.pp). */
+  .pp { flex: 1; flex-direction: column; min-width: calc(var(--center_width) * .7); padding: 0 16px; }
+  .pp.even { background: var(--bg); }
+  .pp-below .bars { flex-direction: column; gap: 4px; }
+  .pp-below .pp-frame { height: calc(var(--bar_height) * .6); }
+  .pp-below .pp-frame.side-home { align-self: flex-end; }
+  .pp-below .pp-frame.side-even { align-self: center; }
+  .pp-below .pp { flex-direction: row; gap: .35em; }
+  .pp-below .pp .period, .pp-below .pp .clock { font-size: calc(var(--bar_height) * .42); }
+
   .bump { animation: bump .6s ease-out; }
   @keyframes bump { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
   .score span span { display: inline-block; }
@@ -113,6 +125,7 @@
 </head>
 <body>
 <div class="board hidden" id="board">
+  <div class="bars"><div class="main">
   <div class="frame"><div class="inner">
     <div class="cell team away"><img class="logo" id="a-logo" alt=""><div class="label" id="a-label"><div class="name" id="a-name"></div><div class="big"><span id="a-big"></span></div><div class="sog" id="a-sog"></div></div></div>
     <div class="cell score away"><span><span id="a-score"></span></span></div>
@@ -121,6 +134,9 @@
     <div class="cell team home"><div class="label" id="h-label"><div class="name" id="h-name"></div><div class="big"><span id="h-big"></span></div><div class="sog" id="h-sog"></div></div><img class="logo" id="h-logo" alt=""></div>
   </div></div>
   <div class="info" id="info"></div>
+  </div>
+  <div class="frame pp-frame hidden" id="pp"><div class="inner"><div class="cell pp" id="pp-cell"><div class="period" id="pp-text"></div><div class="clock" id="pp-clock"></div></div></div></div>
+  </div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -170,16 +186,24 @@ async function tick() {
     const look = style.look;
     board.className = ["board", "shape-" + look.shape, "frame-" + look.frame, "fill-" + look.fill,
       look.stack ? "stack" : "", look.one_line ? "one-line" : "", look.info ? "info-on" : "",
-      style.show_gloss !== false ? "gloss" : "", state.game ? "" : "hidden"].join(" ");
+      style.show_gloss !== false ? "gloss" : "", "pp-" + (look.pp || "right"), state.game ? "" : "hidden"].join(" ");
     for (const key of SIZE_KEYS) if (style[key] != null) root.setProperty("--" + key, style[key] + (key === "skew" ? "deg" : "px"));
     const game = state.game;
     if (game) {
       side("a", game.away, style);
       side("h", game.home, style);
       $("period").textContent = style.show_period === false ? "" : (game.period ?? "");
-      $("clock").textContent = game.clock ?? "";
+      // Only the running time can be hidden: "Final" and the start time stay.
+      $("clock").textContent = style.show_clock === false && game.live ? "" : (game.clock ?? "");
       $("center").classList.toggle("live", game.live);
       $("center").classList.toggle("hidden", !style.show_status);
+      const pp = style.show_pp === false ? null : game.pp;
+      $("pp").className = pp ? "frame pp-frame side-" + pp.side : "frame pp-frame hidden";
+      if (pp) {
+        $("pp-cell").className = "cell pp " + (pp.side === "even" ? "even" : pp.side);
+        $("pp-text").textContent = pp.text;
+        $("pp-clock").textContent = pp.clock;
+      }
       const info = $("info");
       const sogKnown = game.away.sog != null && game.home.sog != null;
       info.classList.toggle("show", style.show_sog && sogKnown);

@@ -393,8 +393,8 @@ class App(ctk.CTk):
         ("Temps", ("clock_size", "clock_spacing", "period_size", "center_width")),
     )
     SWITCHES = (("team_colors", "Couleurs des équipes"), ("show_logos", "Logos"), ("show_names", "Noms"),
-                ("show_status", "Bloc du temps"), ("show_period", "Période"), ("show_sog", "Tirs au but"),
-                ("show_gloss", "Reflet brillant"))
+                ("show_status", "Bloc du temps"), ("show_period", "Période"), ("show_clock", "Temps restant"), ("show_sog", "Tirs au but"),
+                ("show_gloss", "Reflet brillant"), ("show_pp", "Pénalités (5v4)"))
 
     SECTIONS = ("Presets", "Style", "Équipes", "Barre et logo", "Score et temps", "Couleurs et retard")
 

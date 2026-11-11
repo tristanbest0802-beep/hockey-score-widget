@@ -33,7 +33,9 @@ DEFAULTS: dict = {
     "show_sog": False,
     "show_status": True,
     "show_period": True,
+    "show_clock": True,        # off: the time left is hidden during play, the period stays
     "show_gloss": True,
+    "show_pp": True,           # penalties: skaters on the ice (5v4) and penalty time left
     "accent": "#2D7F55",       # panel colour when team colours are off
     "background": "#0B0B0C",   # centre block (period and clock)
     "text": "#F1F6F3",
@@ -67,14 +69,15 @@ DEFAULTS.update({key: spec[3] for key, spec in SIZES.items()})
 #   fill:  solid | texture (ice) | dark | fade (colour to dark) | none (underline only)
 #   stack: name above the score in the team panel (no separate score box)
 #   one_line: period and clock on one line;  info: shots on goal strip under the bar
-_LOOK = dict(shape="rounded", frame="silver", fill="solid", stack=False, one_line=False, info=False)
+#   pp: where the penalty box goes, right of the bar or below it
+_LOOK = dict(shape="rounded", frame="silver", fill="solid", stack=False, one_line=False, info=False, pp="right")
 LOOKS: dict[str, dict] = {
     "classic": _LOOK,
     "slanted": dict(_LOOK, shape="slant"),
     "modern": dict(_LOOK, shape="pill"),
-    "minimal": dict(_LOOK, frame="none", fill="none", one_line=True),
+    "minimal": dict(_LOOK, frame="none", fill="none", one_line=True, pp="below"),
     "textured": dict(_LOOK, fill="texture", stack=True),
-    "compact": dict(_LOOK, shape="slant", frame="team", one_line=True),
+    "compact": dict(_LOOK, shape="slant", frame="team", one_line=True, pp="below"),
     "elegant": dict(_LOOK, shape="chamfer", frame="gold", fill="dark", stack=True),
     "wide": dict(_LOOK, fill="fade", stack=True, info=True),
 }

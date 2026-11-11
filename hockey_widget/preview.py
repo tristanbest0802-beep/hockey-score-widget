@@ -209,7 +209,7 @@ def render(state: dict, settings: dict, logos: LogoCache, scale: float = 2.0,
 
     away, home = side_parts(game["away"]), side_parts(game["home"])
     period = (game.get("period") or "") if style["show_period"] else ""
-    clock = game.get("clock") or ""
+    clock = "" if not style.get("show_clock", True) and game.get("live") else game.get("clock") or ""
     live = bool(period and game.get("live"))
     dot = 14 * scale if live else 0
     one_gap = s("clock_size") * .3 if look["one_line"] and period and clock else 0
@@ -374,9 +374,53 @@ def render(state: dict, settings: dict, logos: LogoCache, scale: float = 2.0,
     else:
         bar = Image.alpha_composite(back, front)
 
+    def with_penalty(board: Image.Image) -> Image.Image:
+        """Adds the penalty box (5v4 and time left) right of the board or below it, as in widget.html."""
+        pp = game.get("pp") if style.get("show_pp", True) else None
+        if not pp:
+            return board
+        # shortcut: a plain rounded box, not the bar's exact frame and shape; only widget.html draws those.
+        below = look.get("pp") == "below"
+        fonts = (_font("Bold", height * .42),) * 2 if below else (period_font, clock_font)
+        texts = [(t, f) for t, f in zip((pp["text"], pp["clock"]), fonts) if t]
+        widths = [_text_width(t, f, 0) for t, f in texts]
+        gap, pad = (4 if below else 8) * scale, 16 * scale
+        if below:
+            box_w, box_h = sum(widths) + height * .12 * (len(texts) - 1) + 2 * pad, height * .6
+        else:
+            box_w, box_h = max(s("center_width") * .7, max(widths) + 2 * pad), height
+        box_w, box_h = math.ceil(box_w), math.ceil(box_h)
+        if below:
+            out = Image.new("RGBA", (max(board.width, box_w), board.height + round(gap) + box_h), (0, 0, 0, 0))
+            x0 = {"away": 0, "home": out.width - box_w}.get(pp["side"], (out.width - box_w) // 2)
+            y0 = board.height + round(gap)
+        else:
+            out = Image.new("RGBA", (board.width + round(gap) + box_w, board.height), (0, 0, 0, 0))
+            x0, y0 = board.width + round(gap), 0
+        out.alpha_composite(board)
+        pen = ImageDraw.Draw(out)
+        colour = {"away": away["colour"], "home": home["colour"]}.get(pp["side"], _rgb(style["background"]))
+        if fill == "none":
+            pen.rectangle((x0, y0 + box_h - round(6 * scale), x0 + box_w - 1, y0 + box_h - 1), fill=colour)
+        else:
+            pen.rounded_rectangle((x0, y0, x0 + box_w - 1, y0 + box_h - 1), radius=min(radius, box_h // 2),
+                                  fill=colour, outline=sep_colour if border else None, width=border)
+        if below:
+            left = x0 + pad
+            for (t, f), w in zip(texts, widths):
+                _draw_text(pen, left + w / 2, y0 + box_h / 2, t, f, 0, text)
+                left += w + height * .12
+        else:
+            sizes = [s("period_size"), s("clock_size")][:len(texts)]
+            top = y0 + (box_h - sum(sizes)) / 2
+            for (t, f), size in zip(texts, sizes):
+                _draw_text(pen, x0 + box_w / 2, top + size / 2, t, f, 0, text)
+                top += size
+        return out
+
     away_sog, home_sog = game["away"].get("sog"), game["home"].get("sog")
     if not (look["info"] and style["show_sog"] and away_sog is not None and home_sog is not None):
-        return bar
+        return with_penalty(bar)
     # Info tab under the bar: shots on goal, as in widget.html.
     info = f"TIRS AU BUT : {game['away']['abbrev']} {away_sog} • {game['home']['abbrev']} {home_sog}"
     info_font = _font("Bold", s("name_size") * .72)
@@ -391,4 +435,4 @@ def render(state: dict, settings: dict, logos: LogoCache, scale: float = 2.0,
     draw.polygon([(x0 + line, height), (x1 - line, height), (x1 - slope - line, height + tab_h - line),
                   (x0 + slope + line, height + tab_h - line)], fill=(14, 16, 19, 255))
     _draw_text(draw, out.width / 2, height + (tab_h - line) / 2, info, info_font, 0, text, shadow=False)
-    return out
+    return with_penalty(out)

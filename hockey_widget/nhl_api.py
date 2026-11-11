@@ -40,6 +40,10 @@ class Game:
     clock_seconds: int | None = None
     running: bool = False
     fetched_at: float = 0.0
+    # Skaters on the ice while a penalty runs (5 and 4 on a power play), and the penalty time left.
+    away_strength: int | None = None
+    home_strength: int | None = None
+    penalty_seconds: int | None = None
 
     @property
     def is_live(self) -> bool:
@@ -70,6 +74,7 @@ def parse_games(data: dict, fetched_at: float | None = None) -> list[Game]:
     for raw in data.get("games", []):
         clock = raw.get("clock") or {}
         period = raw.get("periodDescriptor") or {}
+        situation = raw.get("situation") or {}
         games.append(Game(
             id=int(raw["id"]),
             state=raw.get("gameState", "FUT"),
@@ -83,6 +88,9 @@ def parse_games(data: dict, fetched_at: float | None = None) -> list[Game]:
             clock_seconds=clock.get("secondsRemaining"),
             running=bool(clock.get("running")),
             fetched_at=fetched_at,
+            away_strength=(situation.get("awayTeam") or {}).get("strength"),
+            home_strength=(situation.get("homeTeam") or {}).get("strength"),
+            penalty_seconds=situation.get("secondsRemaining"),
         ))
     return games
 
