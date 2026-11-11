@@ -156,9 +156,11 @@ function side(prefix, team, style) {
     style.team_colors && team.color ? team.color : style.accent);
 }
 
+let refresh = 250;
 async function tick() {
   try {
     const state = await (await fetch("/state", { cache: "no-store" })).json();
+    refresh = Math.max(100, (state.refresh ?? 0.25) * 1000);
     const style = state.style;
     const root = document.documentElement.style;
     root.setProperty("--accent", style.accent);
@@ -185,8 +187,8 @@ async function tick() {
     }
   } catch (e) { /* app closed: keep the last score on screen */ }
 }
-tick();
-setInterval(tick, 250);  // local request: cheap, keeps the clock within a quarter second
+// Local request, cheap: the faster the refresh, the closer to the exact instant the clock changes second.
+(async function loop() { await tick(); setTimeout(loop, refresh); })();
 </script>
 </body>
 </html>

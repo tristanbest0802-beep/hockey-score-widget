@@ -20,7 +20,8 @@ from hockey_widget.settings import PRESETS, SIZES
 from hockey_widget.widget_state import LOGO_TYPES, DelayedFeed, build_state, custom_logo, team_color
 
 APP_TITLE = "Hockey Score Widget"
-MIN_POLL_SECONDS = 0.1
+MIN_REFRESH_SECONDS = 0.1
+API_POLL_SECONDS = 3  # the NHL answers from a ~20 s cache: asking more often brings nothing new
 TAB_NAMES = ("Aperçu", "Personnaliser", "Réglages")
 
 # Neutral darks; green (the streamer's soft jade) only as accent: active tab, controls, titles.
@@ -736,8 +737,8 @@ class App(ctk.CTk):
         app_box.grid_columnconfigure(1, weight=1)
         section_title(app_box, "Logiciel").grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 8))
         self._field(app_box, 1, "server_port", "Port du widget", "")
-        self._field(app_box, 2, "poll_seconds", "Actualisation (s)", "")
-        muted(app_box, "Port : redémarrage requis. Actualisation : 10 secondes minimum.", wraplength=280).grid(
+        self._field(app_box, 2, "refresh_seconds", "Actualisation (s)", "")
+        muted(app_box, "Port : redémarrage requis. Actualisation : rythme d'affichage du widget, 0,1 seconde minimum.", wraplength=280).grid(
             row=4, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 16))
         url_row = ctk.CTkFrame(app_box, fg_color="transparent")
         url_row.grid(row=3, column=0, columnspan=2, sticky="ew", padx=18, pady=(8, 8))
@@ -766,16 +767,16 @@ class App(ctk.CTk):
         values["obs_password"] = self.fields["obs_password"].get()  # spaces can be part of a password
         try:
             ports = [int(values["obs_port"]), int(values["server_port"])]
-            poll = float(values["poll_seconds"].replace(",", "."))
+            refresh = float(values["refresh_seconds"].replace(",", "."))
         except ValueError:
             return "Les ports doivent être des nombres entiers, l'actualisation un nombre (ex. 0,5)."
-        if not math.isfinite(poll):
+        if not math.isfinite(refresh):
             return "L'actualisation doit être un nombre (ex. 0,5)."
         if not all(1024 <= port <= 65535 for port in ports):
             return "Un port doit être entre 1024 et 65535."
         if not values["obs_host"]:
             return "L'adresse d'OBS est vide."
-        self.settings.update(values, obs_port=ports[0], server_port=ports[1], poll_seconds=max(MIN_POLL_SECONDS, poll))
+        self.settings.update(values, obs_port=ports[0], server_port=ports[1], refresh_seconds=max(MIN_REFRESH_SECONDS, refresh))
         return None
 
     def _save_settings_page(self) -> None:
@@ -836,7 +837,8 @@ class App(ctk.CTk):
     def _start_server(self) -> None:
         try:
             self.server = start_server(self.settings["server_port"],
-                                       lambda: self.feed.current(self.settings["delay_seconds"]),
+                                       lambda: {**self.feed.current(self.settings["delay_seconds"]),
+                                                "refresh": self.settings["refresh_seconds"]},
                                        lambda abbrev: custom_logo(abbrev, self.settings))
             self._set_status(self.server_status, f"Widget : port {self.settings['server_port']}", True)
         except OSError:
@@ -860,7 +862,7 @@ class App(ctk.CTk):
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
             self._fetch()
-            self._stop.wait(max(MIN_POLL_SECONDS, float(self.settings["poll_seconds"])))
+            self._stop.wait(API_POLL_SECONDS)
 
     def close(self) -> None:
         self._stop.set()

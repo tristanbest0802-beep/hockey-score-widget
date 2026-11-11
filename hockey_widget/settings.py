@@ -15,7 +15,7 @@ DEFAULTS: dict = {
     "obs_source": "Score Hockey",
     # App
     "server_port": 8765,
-    "poll_seconds": 10,
+    "refresh_seconds": 0.25,  # how often the widget redraws; the NHL API is polled on its own schedule
     # Match choice
     "auto_favourite": True,
     "favourite": "MTL",
