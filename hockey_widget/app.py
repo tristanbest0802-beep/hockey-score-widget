@@ -15,7 +15,7 @@ from tkinter import colorchooser, filedialog
 
 import customtkinter as ctk
 
-from hockey_widget import espn, nhl_api, obs, preview, settings as settings_store, teams
+from hockey_widget import __version__, espn, nhl_api, obs, preview, settings as settings_store, teams, update_check
 from hockey_widget.server import start_server
 from hockey_widget.settings import PRESETS, SIZES
 from hockey_widget.widget_state import LOGO_TYPES, DelayedFeed, build_state, custom_logo, team_color
@@ -230,6 +230,7 @@ class App(ctk.CTk):
             self._start_server()
             threading.Thread(target=self._poll_loop, daemon=True).start()
             threading.Thread(target=self._espn_loop, daemon=True).start()
+            self._look_for_update(quiet=True)
         self.after(1000, self._preview_loop)
 
     # ----- sidebar -------------------------------------------------------
@@ -752,6 +753,18 @@ class App(ctk.CTk):
         self.url_label.pack(side="left")
         ghost_button(url_row, "Copier l'URL", self._copy_url).pack(side="left", padx=12)
 
+        section_title(app_box, f"Version {__version__}").grid(
+            row=5, column=0, columnspan=2, sticky="w", padx=18, pady=(4, 8))
+        upd_row = ctk.CTkFrame(app_box, fg_color="transparent")
+        upd_row.grid(row=6, column=0, columnspan=2, sticky="ew", padx=18)
+        self.update_button = ghost_button(upd_row, "Rechercher une mise à jour", self._look_for_update, width=200)
+        self.update_button.pack(side="left")
+        self.install_button = ctk.CTkButton(upd_row, text="Mettre à jour", height=30, width=130,
+                                            font=font(12, "bold"), command=self._install_update)
+        self.update_info: update_check.UpdateInfo | None = None
+        self.update_result = muted(app_box, "", wraplength=280)
+        self.update_result.grid(row=7, column=0, columnspan=2, sticky="w", padx=18, pady=(6, 16))
+
         bottom = ctk.CTkFrame(page, fg_color="transparent")
         bottom.grid(row=3, column=0, sticky="ew", padx=28, pady=(16, 28))
         ctk.CTkButton(bottom, text="Enregistrer", height=38, width=150, font=font(13, "bold"),
@@ -813,6 +826,50 @@ class App(ctk.CTk):
                 message, ok = f"Erreur OBS : {exc}", False
             self.after(0, lambda: self.obs_result.configure(
                 text=message, text_color=GREEN_TEXT if ok else COL_RED))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _look_for_update(self, quiet: bool = False) -> None:
+        """quiet: startup check, says nothing unless a new version exists."""
+        if not quiet:
+            self.update_result.configure(text="Recherche…", text_color=COL_MUTED)
+
+        def work() -> None:
+            try:
+                info, error = update_check.check(__version__), None
+            except Exception as exc:  # no network, GitHub down, bad JSON: say so, never crash
+                info, error = None, exc
+            self.after(0, lambda: self._show_update(info, error, quiet))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_update(self, info, error, quiet: bool) -> None:
+        self.update_info = info
+        if info:
+            self.update_result.configure(text=f"La version {info.version} est disponible.", text_color=GREEN_TEXT)
+            self.install_button.pack(side="left", padx=10)
+            return
+        self.install_button.pack_forget()
+        if not quiet:
+            self.update_result.configure(
+                text=f"Vérification impossible : {error}" if error else "Tu as la dernière version.",
+                text_color=COL_RED if error else GREEN_TEXT)
+
+    def _install_update(self) -> None:
+        info = self.update_info
+        if not info:
+            return
+        self.install_button.configure(state="disabled")
+        self.update_result.configure(text="Téléchargement de la mise à jour…", text_color=COL_MUTED)
+        folder = settings_store.settings_path().parent / "mises-a-jour"
+
+        def work() -> None:
+            try:
+                update_check.install_update(info, folder)
+                message, ok = "Installateur lancé : suis ses étapes.", True
+            except (update_check.UpdateError, OSError) as exc:
+                message, ok = str(exc), False
+            self.after(0, lambda: (self.update_result.configure(text=message,
+                                                                text_color=GREEN_TEXT if ok else COL_RED),
+                                   self.install_button.configure(state="normal")))
         threading.Thread(target=work, daemon=True).start()
 
     def widget_url(self) -> str:

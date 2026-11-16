@@ -27,6 +27,12 @@ jobs:
       - name: Tests
         run: python -m unittest discover -s tests -t .
 
+      - name: Version number in the program
+        if: ${{ github.ref_type == 'tag' }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: Set-Content -Encoding utf8 hockey_widget\__init__.py "__version__ = `"$($env:TAG.TrimStart('v'))`""
+
       - name: Build HockeyScoreWidget.exe
         run: powershell -ExecutionPolicy Bypass -File build.ps1
 
